@@ -1,0 +1,35 @@
+#!/bin/bash
+
+#SBATCH -J ELECTRAlim100id
+
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:8
+
+#SBATCH -o ELECTRALIM100id.out
+
+#SBATCH -e ELECTRALIM100id.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/idscratch/ibdelectraidscratch -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/idscratch/ibd_electra_id_scratch_log.txt --input_id --num_labels=2
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/embedscratch/ibdelectraembedscratch -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/embedscratch/ibd_electra_embed_scratch_log.txt --input_embed --num_labels=2
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/idnofreqlimit/idchkpt/ibdelectraidnofreqlimitid -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/idnofreqlimit/idchkpt/ibd_electra_id_nofreqlimit_id_log.txt --input_id --num_labels=2 \
+--load_model  ~/guille/model_store/nofreqlimitelectra/nofreqlimitelectraid/nofreqlimitelectraid_epoch19/pytorch_model.bin
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/idnofreqlimit/embedchkpt/ibdelectraidnofreqlimitembed -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/idnofreqlimit/embedchkpt/ibd_electra_id_nofreqlimit_embed_log.txt --input_id --num_labels=2 \
+--load_model  ~/guille/model_store/nofreqlimitelectra/nofreqlimitelectraembed/nofreqlimitelectraembed_epoch19/pytorch_model.bin
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/embednofreqlimit/idchkpt/ibdelectraembednofreqlimitid -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/embednofreqlimit/idchkpt/ibd_electra_embed_nofreqlimit_id_log.txt --input_embed --num_labels=2 \
+--load_model  ~/guille/model_store/nofreqlimitelectra/nofreqlimitelectraid/nofreqlimitelectraid_epoch19/pytorch_model.bin
+
+python begin.py -c ~/guille/IBD_train_otu.npy -t ~/guille/IBD_test_otu.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/ibdelectra/embednofreqlimit/embedchkpt/ibdelectraembednofreqlimitembed -b 48 -l 10 -e 20 --cuda --log_file ~/guille/model_store/ibdelectra/embednofreqlimit/embedchkpt/ibd_electra_embed_nofreqlimit_embed_log.txt --input_embed --num_labels=2 \
+--load_model  ~/guille/model_store/nofreqlimitelectra/nofreqlimitelectraembed/nofreqlimitelectraembed_epoch19/pytorch_model.bin

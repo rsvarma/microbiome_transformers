@@ -1,0 +1,2 @@
+#!/bin/bash
+python begin.py -c ~/guille/train_repeat_5.npy -t ~/guille/test_repeat_5.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/lr_01/baseline/baseline -b 3 -l 10 -e 20 --cuda --log_file ~/guille/model_store/lr_01/baseline/hf_baseline_log_1_mask.txt
