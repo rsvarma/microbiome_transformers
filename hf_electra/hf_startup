@@ -17,4 +17,4 @@
 #SBATCH --mail-user=varmar@oregonstate.edu
 
 source ~/guille/torch10.1/bin/activate
-python begin.py -c ~/guille/train_encodings_2d.npy -t ~/guille/test_encodings_2d.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/model_store/freqlimit100electra/freqlimit100electraembed/freqlimit100electraembed -b 36 -l 10 -e 20 --cuda --log_file ~/guille/model_store/freqlimit100electra/freqlimit100electraembed/freq_limit_100_electra_embed_log.txt --input_embed
+python begin.py -c ~/guille/train_encodings_2d.npy -t ~/guille/test_encodings_2d.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/models/pretrain -b 3 -l 10 -e 20 --no_cuda --log_file ~/guille/models/pretrain.txt

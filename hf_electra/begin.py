@@ -2,10 +2,11 @@ import argparse
 import pdb
 from torch.utils.data import DataLoader
 
-
+import torch
 from pretrain_hf import ELECTRATrainer
 from dataset import ELECTRADataset
-from transformers import ElectraConfig,ElectraForPreTraining
+from transformers import ElectraConfig
+from electra_pretrain_model import ElectraPretrainModel
 
 
 def train():
@@ -29,16 +30,14 @@ def train():
     parser.add_argument("--no_cuda",dest='with_cuda',action='store_false',help="train on CPU")
     parser.set_defaults(with_cuda=False)
 
-    parser.add_argument("--input_embed", dest='input_embed', action='store_true',help="give model custom embeddings")
-    parser.add_argument("--input_id",dest='input_embed',action='store_false',help="give model input id's and get embeddings from embedding layer")
-    parser.set_defaults(input_embed=True)
+
 
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
     parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
     parser.add_argument("--log_file", type=str,default=None,help="log file for performance metrics" )
 
-    parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of adam")
+    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate of adam")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="adam first beta value")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")
@@ -50,10 +49,10 @@ def train():
 
 
     print("Loading Train Dataset", args.train_dataset)
-    train_dataset = ELECTRADataset(args.train_dataset, args.vocab_path,args.input_embed)
+    train_dataset = ELECTRADataset(args.train_dataset, args.vocab_path)
 
     print("Loading Test Dataset", args.test_dataset)
-    test_dataset = ELECTRADataset(args.test_dataset, args.vocab_path,args.input_embed) if args.test_dataset is not None else None
+    test_dataset = ELECTRADataset(args.test_dataset, args.vocab_path) if args.test_dataset is not None else None
 
     print("Creating Dataloader")
     train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers,drop_last=True)
@@ -64,17 +63,17 @@ def train():
   
 
     electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=2*args.hidden,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=1898,)
-    electra = ElectraForPreTraining(electra_config)
+    electra = ElectraPretrainModel(electra_config,torch.from_numpy(train_dataset.embeddings))
     print("Creating Electra Trainer")
     trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                           lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
                           with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=args.log_file,
-                          training_checkpoint=args.load_model,input_embed=args.input_embed)
+                          training_checkpoint=args.load_model)
 
     print("Training Start")
     for epoch in range(args.resume_epoch,args.epochs):
         trainer.train(epoch)
-        if epoch == 4 or epoch == 9 or epoch == 14 or epoch == 19:
+        if epoch == 0 or epoch == 4 or epoch == 9 or epoch == 14 or epoch == 19:
             trainer.save(epoch, args.output_path)
 
         if test_data_loader is not None:
