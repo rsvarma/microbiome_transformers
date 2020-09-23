@@ -20,7 +20,7 @@ def train():
     parser.add_argument("-hs", "--hidden", type=int, default=100, help="hidden size of transformer model")
     parser.add_argument("-l", "--layers", type=int, default=8, help="number of layers")
     parser.add_argument("-a", "--attn_heads", type=int, default=10, help="number of attention heads")
-    parser.add_argument("-s", "--seq_len", type=int, default=20, help="maximum sequence len")
+    parser.add_argument("-s", "--seq_len", type=int, default=1898, help="maximum sequence len")
 
     parser.add_argument("-b", "--batch_size", type=int, default=3, help="number of batch_size")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
@@ -62,7 +62,7 @@ def train():
     vocab_len = train_dataset.vocab_len()
   
 
-    electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=2*args.hidden,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=1898,)
+    electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=2*args.hidden,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=args.seq_len,)
     electra = ElectraPretrainModel(electra_config,torch.from_numpy(train_dataset.embeddings))
     print("Creating Electra Trainer")
     trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader, test_dataloader=test_data_loader,

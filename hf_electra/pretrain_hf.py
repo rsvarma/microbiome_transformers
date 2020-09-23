@@ -61,7 +61,7 @@ class ELECTRATrainer:
             self.log_file = log_file
             if(training_checkpoint is None):
                 with open(self.log_file,"w+") as f:
-                    f.write("EPOCH,MODE,TOTAL CORRECT,AVG LOSS,TOTAL ELEMENTS,ACCURACY,MASK CORRECT,TOTAL MASK,MASK ACCURACY,GEN TOTAL ACCURACY, GEN MASK ACCURACY\n")
+                    f.write("EPOCH,MODE,AVG LOSS,TOTAL CORRECT,TOTAL ELEMENTS,ACCURACY,MASK CORRECT,TOTAL MASK,MASK ACCURACY,GEN TOTAL ACCURACY, GEN MASK ACCURACY\n")
         print("Total Parameters:", sum([p.nelement() for p in self.electra.parameters()]))
 
     def train(self, epoch):

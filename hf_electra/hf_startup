@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J ELECTRAlim100id
+#SBATCH -J ELECTRAlim1001870
 
 #SBATCH -A eecs
 
@@ -8,13 +8,15 @@
 
 #SBATCH --gres=gpu:8
 
-#SBATCH -o ELECTRALIM100id.out
+#SBATCH -o ELECTRALIM1001870.out
 
-#SBATCH -e ELECTRALIM100id.err
+#SBATCH -e ELECTRALIM1001870.err
 
 #SBATCH --mail-type=BEGIN,END,FAIL
 
 #SBATCH --mail-user=varmar@oregonstate.edu
 
-source ~/guille/torch10.1/bin/activate
-python begin.py -c ~/guille/train_encodings_2d.npy -t ~/guille/test_encodings_2d.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/models/pretrain -b 3 -l 10 -e 20 --no_cuda --log_file ~/guille/models/pretrain.txt
+#source ~/guille/torch10.1/bin/activate
+
+
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/guille/models/pretrain_512 -b 27 -l 10 -e 20 -s 513 --cuda --log_file ~/guille/models/pretrain_512.txt

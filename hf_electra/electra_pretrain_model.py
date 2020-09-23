@@ -14,12 +14,12 @@ class ElectraPretrainModel(nn.Module):
     def forward(self,data,attention_mask):
             #pdb.set_trace()
             g_loss, g_scores = self.generator(data['electra_input'],attention_mask,data['electra_mask_label'])
-            pdb.set_trace()
+            #pdb.set_trace()
             with torch.no_grad():
                 predictions = g_scores.max(2)[1]
                 disc_labels = (data["electra_label"] != predictions).long()
                 disc_labels = disc_labels.masked_fill(~data["mask_locations"],0)
-                disc_inputs = torch.where(data["mask_locations"],predictions,data["electra_label"])
+                disc_inputs = torch.where(data["mask_locations"],predictions,data["electra_input"])
             
 
             d_loss,d_scores = self.discriminator(disc_inputs,attention_mask,disc_labels)
