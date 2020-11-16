@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from sklearn import metrics
 
 
-
+from electra_discriminator import ElectraDiscriminator
 from transformers import ElectraConfig,ElectraForSequenceClassification
 import tqdm
 import pdb
@@ -16,10 +16,10 @@ class ELECTRATrainer:
     ELECTRATrainer make the pretrained ELECTRA model 
     """
 
-    def __init__(self, config: ElectraConfig, vocab_size: int,
-                 train_dataloader: DataLoader, training_checkpoint = None, test_dataloader: DataLoader = None,
+    def __init__(self, electra: ElectraDiscriminator, vocab_size: int,
+                 train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=10000,
-                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,input_embed=True):
+                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None):
         """
         :param electra: ELECTRA model which you want to train
         :param vocab_size: total word vocab size
@@ -31,18 +31,13 @@ class ELECTRATrainer:
         :param with_cuda: traning with cuda
         :param log_freq: logging frequency of the batch iteration
         """
-        self.input_embed = input_embed
         self.softmax = torch.nn.Softmax()
         # Setup cuda device for ELECTRA training, argument -c, --cuda should be true
         cuda_condition = torch.cuda.is_available() and with_cuda
         self.device = torch.device("cuda:0" if cuda_condition else "cpu")
         self.hardware = "cuda" if cuda_condition else "cpu"
 
-        # This ELECTRA model will be saved every epoch
-        if training_checkpoint:
-            self.electra = ElectraForSequenceClassification.from_pretrained(training_checkpoint,config=config)
-        else:
-            self.electra = ElectraForSequenceClassification(config)
+        self.electra = electra
         self.electra = self.electra.to(self.device)
         self.electra = self.electra.float()
 
@@ -137,10 +132,7 @@ class ELECTRATrainer:
 
             
             # 1. forward the next_sentence_prediction and masked_lm model
-            if self.input_embed:
-                loss,scores = self.electra.forward(inputs_embeds=data["electra_input"],attention_mask=mask,labels=data["electra_label"])
-            else:
-                loss,scores = self.electra.forward(input_ids=data["electra_input"],attention_mask=mask,labels=data["electra_label"])                
+            loss,scores = self.electra.forward(data["electra_input"],mask,data["electra_label"])            
             # 3. backward and optimization only in train
             if train:
                 #self.optim_schedule.zero_grad()
@@ -152,7 +144,6 @@ class ELECTRATrainer:
                 #self.optim_schedule.step_and_update_lr()
                 self.optim.step()
 
-            scores = self.softmax(scores)
             all_scores.append(scores.detach().cpu())
             predictions = scores.max(1).indices
             #reshape to have same dimension as data["electra_label"]
@@ -206,6 +197,9 @@ class ELECTRATrainer:
         """
         output_file_path = file_path+"_epoch{}".format(epoch)
         if self.hardware == "parallel":
-            self.electra.module.save_pretrained(output_file_path)
+            #pdb.set_trace()
+            self.electra.module.discriminator.save_pretrained(output_file_path+"_disc")
+            torch.save(self.electra.module.embed_layer.state_dict(),output_file_path+"_embed")
         else:
-            self.electra.save_pretrained(output_file_path)
+            self.electra.discriminator.save_pretrained(output_file_path+"_disc")
+            torch.save(self.electra.embed_layer.state_dict(),output_file_path+"_embed")

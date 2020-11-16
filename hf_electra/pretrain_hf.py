@@ -17,7 +17,7 @@ class ELECTRATrainer:
     def __init__(self, electra: ElectraPretrainModel, vocab_size: int,
                  train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=10000,
-                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,training_checkpoint=None):
+                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,append=False):
         """
         :param electra: ELECTRA model which you want to train
         :param vocab_size: total word vocab size
@@ -59,9 +59,9 @@ class ELECTRATrainer:
         # clear log file
         if log_file:
             self.log_file = log_file
-            if(training_checkpoint is None):
+            if not append:
                 with open(self.log_file,"w+") as f:
-                    f.write("EPOCH,MODE,AVG LOSS,TOTAL CORRECT,TOTAL ELEMENTS,ACCURACY,MASK CORRECT,TOTAL MASK,MASK ACCURACY,GEN TOTAL ACCURACY, GEN MASK ACCURACY\n")
+                    f.write("EPOCH,MODE,AVG LOSS,AVG G LOSS,AVG D LOSS,TOTAL CORRECT,TOTAL ELEMENTS,ACCURACY,MASK CORRECT,TOTAL MASK,MASK ACCURACY,GEN TOTAL ACCURACY,GEN MASK ACCURACY\n")
         print("Total Parameters:", sum([p.nelement() for p in self.electra.parameters()]))
 
     def train(self, epoch):
@@ -92,6 +92,8 @@ class ELECTRATrainer:
                               bar_format="{l_bar}{r_bar}")
 
         cumulative_loss = 0.0
+        cumulative_g_loss = 0.0
+        cumulative_d_loss = 0.0
 
         g_total_correct = 0
         g_total_mask_correct = 0
@@ -112,7 +114,7 @@ class ELECTRATrainer:
             #change label for non-masked tokens to -100 so generator ignores predictions on non-masked tokens
             data["electra_mask_label"] = data["electra_label"].masked_fill(~data["mask_locations"],-100) 
             
-            loss,d_scores,g_scores,d_labels = self.electra.forward(data,mask)             
+            loss,d_scores,g_scores,d_labels,g_loss,d_loss = self.electra.forward(data,mask)             
             # 3. backward and optimization only in train
             if train:
                 #self.optim_schedule.zero_grad()
@@ -161,10 +163,14 @@ class ELECTRATrainer:
             if self.hardware == "parallel":
                 cumulative_loss += loss.sum().item()
                 log_loss = loss.sum().item()
+                cumulative_g_loss += g_loss.sum().item()
+                cumulative_d_loss += d_loss.sum().item()
 
             else:
                 cumulative_loss += loss.item()        
                 log_loss = loss.item()    
+                cumulative_g_loss += g_loss.item()
+                cumulative_d_loss += d_loss.item()
             if i % self.log_freq == 0:
                 data_iter.write("epoch: {}, iter: {}, avg loss: {},accuracy: {}/{}={:.2f}%, mask accuracy: {}/{}={:.2f}%, loss: {}".format(epoch,i,cumulative_loss/(i+1),d_total_correct,total_element,d_total_correct/total_element*100,d_total_mask_correct,total_mask,d_total_mask_correct/total_mask*100,log_loss))
 
@@ -177,10 +183,10 @@ class ELECTRATrainer:
             del d_predictions
 
 
-        print("EP{}_{}, avg_loss={}, accuracy={:.2f}%".format(epoch,str_code,cumulative_loss / len(data_iter),d_total_mask_correct/total_mask*100))
+        print("EP{}_{}, avg_loss={}, accuracy={:.2f}%".format(epoch,str_code,cumulative_loss /(len(data_iter)*data_loader.batch_size),d_total_mask_correct/total_mask*100))
         if self.log_file:
             with open(self.log_file,"a") as f:
-                f.write("{},{},{},{},{},{:4f},{},{},{:4f},{:4f},{:4f}\n".format(epoch,str_code,cumulative_loss/len(data_iter),d_total_correct,total_element,d_total_correct/total_element*100,d_total_mask_correct,total_mask,d_total_mask_correct/total_mask*100,g_total_correct/total_element*100,g_total_mask_correct/total_mask*100))
+                f.write("{},{},{},{},{},{},{},{:4f},{},{},{:4f},{:4f},{:4f}\n".format(epoch,str_code,cumulative_loss/(len(data_iter)*data_loader.batch_size),cumulative_g_loss/(len(data_iter)*data_loader.batch_size),cumulative_d_loss/(len(data_iter)*data_loader.batch_size),d_total_correct,total_element,d_total_correct/total_element*100,d_total_mask_correct,total_mask,d_total_mask_correct/total_mask*100,g_total_correct/total_element*100,g_total_mask_correct/total_mask*100))
 
  
         

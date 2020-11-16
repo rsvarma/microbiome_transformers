@@ -6,12 +6,11 @@ import pdb
 import numpy as np
 
 class ELECTRADataset(Dataset):
-    def __init__(self, samples_path, embedding_path,labels_path,input_embed=True):
+    def __init__(self, samples_path, embedding_path,labels_path):
         self.embeddings = np.load(embedding_path)
         self.samples = np.load(samples_path)
         self.labels = np.load(labels_path)
         self.seq_len = self.samples.shape[1]+1
-        self.input_embed = input_embed
         #Initialize cls token vector values
 
         #take average of all embeddings
@@ -55,31 +54,24 @@ class ELECTRADataset(Dataset):
         sample = np.concatenate((cls_marker,sample))
         electra_input,frequencies = self.match_sample_to_embedding(sample)
         electra_label = self.labels[item]
-        if self.input_embed:
-            output = {"electra_input": torch.tensor(electra_input,dtype=torch.float),
-                    "electra_label": torch.tensor(electra_label,dtype=torch.long),
-                    "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
-                    }
-        else:
-            output = {"electra_input": torch.tensor(electra_input,dtype=torch.long),
-                    "electra_label": torch.tensor(electra_label,dtype=torch.long),
-                    "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
-                    }
+
+        output = {"electra_input": torch.tensor(electra_input,dtype=torch.long),
+                "electra_label": torch.tensor(electra_label,dtype=torch.long),
+                "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
+                }
 
         return output
 
     def match_sample_to_embedding(self, sample):
-        if self.input_embed:
-            electra_input = np.zeros((sample.shape[0],self.embeddings.shape[1]))
-        else:
-            electra_input = sample[:,0]
+        electra_input = sample[:,0].copy()
         frequencies = np.zeros(sample.shape[0])
         for i in range(sample.shape[0]):
             #pdb.set_trace()
             if sample[i,self.frequency_index] > 0:
-                if self.input_embed:
-                    electra_input[i] = self.embeddings[int(sample[i,0])]
                 frequencies[i] = sample[i,self.frequency_index]
+            else:
+                electra_input[i] = self.padding_index
+                
 
         return electra_input,frequencies
 

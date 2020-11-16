@@ -5,11 +5,13 @@ import pdb
 
 class ElectraPretrainModel(nn.Module):
 
-    def __init__(self,config: ElectraConfig,embeddings):
+    def __init__(self,config: ElectraConfig,embeddings,d_loss_weight = 50.0, g_loss_weight = 1.0,generator = None, g_embed_layer = None):
         #pdb.set_trace()
         super().__init__()
-        self.generator = ElectraGenerator(config,embeddings)
+        self.generator = ElectraGenerator(config,embeddings,generator,g_embed_layer)
         self.discriminator = ElectraDiscriminator(config,embeddings)
+        self.d_loss_weight = d_loss_weight
+        self.g_loss_weight = g_loss_weight
 
     def forward(self,data,attention_mask):
             #pdb.set_trace()
@@ -23,8 +25,8 @@ class ElectraPretrainModel(nn.Module):
             
 
             d_loss,d_scores = self.discriminator(disc_inputs,attention_mask,disc_labels)
-            electra_loss = g_loss+50.0*d_loss
-            return electra_loss,d_scores,g_scores,disc_labels
+            electra_loss = self.g_loss_weight*g_loss+self.d_loss_weight*d_loss
+            return electra_loss,d_scores,g_scores,disc_labels,g_loss,d_loss
 
 
 class ElectraDiscriminator(nn.Module):
@@ -49,11 +51,17 @@ class ElectraDiscriminator(nn.Module):
 
 class ElectraGenerator(nn.Module):
 
-    def __init__(self,config: ElectraConfig,embeddings):
+    def __init__(self,config: ElectraConfig,embeddings,generator = None, embed_layer = None):
         super().__init__()
         self.embed_layer = nn.Embedding(num_embeddings=config.vocab_size,embedding_dim=config.embedding_size, padding_idx= config.vocab_size-1)
-        self.embed_layer.weight = nn.Parameter(embeddings)        
-        self.generator = ElectraForMaskedLM(config)
+        if embed_layer:
+            self.embed_layer.load_state_dict(torch.load(embed_layer))
+        else:
+            self.embed_layer.weight = nn.Parameter(embeddings)
+        if generator:
+            self.generator = ElectraForMaskedLM.from_pretrained(generator,config=config)  
+        else:      
+            self.generator = ElectraForMaskedLM(config)
         self.softmax = nn.Softmax(dim=2)
 
     def forward(self,data,attention_mask,labels):

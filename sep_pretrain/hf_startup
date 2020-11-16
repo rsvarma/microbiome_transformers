@@ -1,0 +1,5 @@
+#!/bin/bash
+
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/sep_pretrain/adamlr0.001/test30x10 -b 32 -l 10 -get 150 -ge 30 -det 50 -de 5 -s 513 --cuda --g_log_file ~/models/sep_pretrain/adamlr0.001/testgen30x10.txt --d_log_file ~/models/sep_pretrain/adamlr0.001/testdisc30x10.txt
+
+#python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/sep_pretrain/sgd6x5lr0.01/test -b 32 -l 10 -get 125 -ge  -det 25 -de 5 -s 513 --cuda --g_log_file ~/models/sep_pretrain/sgd6x5lr0.01/testgen.txt --d_log_file ~/models/sep_pretrain/sgd6x5lr0.01/testdisc.txt

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH -J ELECTRAgenonly1e3adam
+
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:2
+
+#SBATCH -o ELECTRAGENONLY1E3.out
+
+#SBATCH -e ELECTRAGENONLY1E3.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/gen_only/gen_only_200ep_1e3_adam -b 32 -l 10 -e 200 -s 513 --cuda --log_file ~/models/gen_only/gen_only_200ep_1e3_adam.txt 

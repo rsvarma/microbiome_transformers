@@ -74,7 +74,7 @@ class ELECTRADataset(Dataset):
             #pdb.set_trace()
             if sample[i,self.frequency_index] > 0:
                 prob = random.random()
-                if prob < 0.15 and i > 0 and sample[i,self.frequency_index] > 100:
+                if prob < 0.15 and i > 0 and sample[i,self.frequency_index] > 0:
                     prob /= 0.15
 
                     # 80% randomly change token to mask token

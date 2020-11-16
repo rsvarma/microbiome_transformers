@@ -29,8 +29,8 @@ pdb.set_trace()
 compressed_train = new_train[:,:sample_len,:]
 compressed_test = new_test[:,:sample_len,:]
 
-np.save('train_encodings_{}'.format(sample_len),compressed_train)
-np.save('test_encodings_{}'.format(sample_len),compressed_test)
+np.save('IBD_train_{}'.format(sample_len),compressed_train)
+np.save('IBD_test_{}'.format(sample_len),compressed_test)
 
 
 

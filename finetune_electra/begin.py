@@ -2,10 +2,11 @@ import argparse
 import pdb
 from torch.utils.data import DataLoader
 
-
+import torch
 from pretrain_hf import ELECTRATrainer
 from dataset import ELECTRADataset,create_weighted_sampler
 from transformers import ElectraConfig,ElectraForSequenceClassification
+from electra_discriminator import ElectraDiscriminator
 
 
 def train():
@@ -21,7 +22,7 @@ def train():
     parser.add_argument("-hs", "--hidden", type=int, default=100, help="hidden size of transformer model")
     parser.add_argument("-l", "--layers", type=int, default=8, help="number of layers")
     parser.add_argument("-a", "--attn_heads", type=int, default=10, help="number of attention heads")
-    parser.add_argument("-s", "--seq_len", type=int, default=20, help="maximum sequence len")
+    parser.add_argument("-s", "--seq_len", type=int, default=1898, help="maximum sequence len")
 
     parser.add_argument("-b", "--batch_size", type=int, default=3, help="number of batch_size")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
@@ -30,10 +31,6 @@ def train():
     parser.add_argument("--cuda", dest='with_cuda', action='store_true',help="train with CUDA")
     parser.add_argument("--no_cuda",dest='with_cuda',action='store_false',help="train on CPU")
     parser.set_defaults(with_cuda=False)
-
-    parser.add_argument("--input_embed", dest='input_embed', action='store_true',help="give model custom embeddings")
-    parser.add_argument("--input_id",dest='input_embed',action='store_false',help="give model input id's and get embeddings from embedding layer")
-    parser.set_defaults(input_embed=True)
 
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
     parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
@@ -45,17 +42,19 @@ def train():
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="adam first beta value")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")
 
-    parser.add_argument("--load_model", type=str, default=None, help="path to saved state_dict of Masked LM model")
-    parser.add_argument("--resume_epoch", type=int, default=0, help="epoch to resume training at")
+    parser.add_argument("--load_disc", type=str, default=None, help="path to saved state_dict of ELECTRA discriminator")
+    parser.add_argument("--load_embed", type=str, default=None, help="path to saved state_dict of ELECTRA discriminator embedding layer")
     parser.add_argument("--num_labels", type = int, default = 2, help="number of labels for classification task")
+    
+    parser.add_argument("--resume_epoch", type=int, default=0, help="epoch to resume training at")    
     args = parser.parse_args()
 
 
     print("Loading Train Dataset", args.train_dataset)
-    train_dataset = ELECTRADataset(args.train_dataset, args.vocab_path,args.train_labels,args.input_embed)
+    train_dataset = ELECTRADataset(args.train_dataset, args.vocab_path,args.train_labels)
 
     print("Loading Test Dataset", args.test_dataset)
-    test_dataset = ELECTRADataset(args.test_dataset, args.vocab_path,args.test_labels,args.input_embed) if args.test_dataset is not None else None
+    test_dataset = ELECTRADataset(args.test_dataset, args.vocab_path,args.test_labels) if args.test_dataset is not None else None
 
     print("Creating Training Sampler")
     sampler = create_weighted_sampler(args.train_labels)
@@ -68,12 +67,13 @@ def train():
     vocab_len = train_dataset.vocab_len()
   
 
-    electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=2*args.hidden,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=1898,num_labels=args.num_labels)
+    electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=2*args.hidden,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=args.seq_len,num_labels=args.num_labels)
+    electra = ElectraDiscriminator(electra_config,torch.from_numpy(train_dataset.embeddings),args.load_disc,args.load_embed)    
+    
     print("Creating Electra Trainer")
-    trainer = ELECTRATrainer(electra_config, vocab_len, train_dataloader=train_data_loader,training_checkpoint=args.load_model, test_dataloader=test_data_loader,
+    trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                           lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
-                          with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=args.log_file,
-                          input_embed=args.input_embed)
+                          with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=args.log_file)
 
     print("Training Start")
     for epoch in range(args.resume_epoch,args.epochs):
