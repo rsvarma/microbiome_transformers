@@ -1,5 +1,23 @@
 #!/bin/bash
 
-python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/sep_pretrain/adamlr0.001/test30x10 -b 32 -l 10 -get 150 -ge 30 -det 50 -de 5 -s 513 --cuda --g_log_file ~/models/sep_pretrain/adamlr0.001/testgen30x10.txt --d_log_file ~/models/sep_pretrain/adamlr0.001/testdisc30x10.txt
+#SBATCH -J ELECTRA15epochf5head
 
-#python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/sep_pretrain/sgd6x5lr0.01/test -b 32 -l 10 -get 125 -ge  -det 25 -de 5 -s 513 --cuda --g_log_file ~/models/sep_pretrain/sgd6x5lr0.01/testgen.txt --d_log_file ~/models/sep_pretrain/sgd6x5lr0.01/testdisc.txt
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:2
+
+#SBATCH -o ELECTRA15epochf5head.out
+
+#SBATCH -e ELECTRA15epochf5head.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/discsgdlr1e2/10head5layer15epochfreeze -b 32 -l 5 -a 10 -e 15 -s 513 -gs 513 --cuda --d_log_file ~/models/discsgdlr1e2/10head5layer15epochfreeze.txt \
+--load_gen ~/models/basegen/test_epoch30_gen/pytorch_model.bin ~/models/basegen/test_epoch60_gen/pytorch_model.bin ~/models/basegen/test_epoch90_gen/pytorch_model.bin ~/models/basegen/test_epoch120_gen/pytorch_model.bin ~/models/basegen/test_epoch150_gen/pytorch_model.bin \
+--load_g_embed ~/models/basegen/test_epoch30gen_embed ~/models/basegen/test_epoch60gen_embed ~/models/basegen/test_epoch90gen_embed ~/models/basegen/test_epoch120gen_embed ~/models/basegen/test_epoch150gen_embed --freeze

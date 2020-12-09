@@ -28,6 +28,10 @@ def train():
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=0, help="dataloader worker size")
 
+    parser.add_argument("--freeze", dest='freeze_embed', action='store_true',help="freeze discriminator embedding layer to GloVE embeddings")
+    parser.add_argument("--no_freeze",dest='freeze_embed',action='store_false',help="train discriminator embedding layer after initializing to GloVE embeddings")
+    parser.set_defaults(freeze_embed=False)
+
     parser.add_argument("--cuda", dest='with_cuda', action='store_true',help="train with CUDA")
     parser.add_argument("--no_cuda",dest='with_cuda',action='store_false',help="train on CPU")
     parser.set_defaults(with_cuda=False)
@@ -73,7 +77,7 @@ def train():
     print("Creating Electra Trainer")
     trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader, test_dataloader=test_data_loader,
                           lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
-                          with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=args.log_file)
+                          with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=args.log_file,freeze_embed=args.freeze_embed)
 
     print("Training Start")
     for epoch in range(args.resume_epoch,args.epochs):

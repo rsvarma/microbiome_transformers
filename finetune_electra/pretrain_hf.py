@@ -19,7 +19,7 @@ class ELECTRATrainer:
     def __init__(self, electra: ElectraDiscriminator, vocab_size: int,
                  train_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=10000,
-                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None):
+                 with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,freeze_embed=False):
         """
         :param electra: ELECTRA model which you want to train
         :param vocab_size: total word vocab size
@@ -55,7 +55,12 @@ class ELECTRATrainer:
         # Setting the Adam optimizer with hyper-param
         #self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         #self.optim_schedule = ScheduledOptim(self.optim, self.electra.hidden, n_warmup_steps=warmup_steps)
-        self.optim = SGD(self.electra.parameters(),lr=lr,momentum=0.9)
+        if freeze_embed:
+            if self.hardware == "parallel":
+                self.electra.module.embed_layer.weight.requires_grad = False
+            else:
+                self.electra.embed_layer.weight.requires_grad = False
+        self.optim = SGD([param for param in self.electra.parameters() if param.requires_grad == True],lr=lr,momentum=0.9)
 
         self.log_freq = log_freq
 
