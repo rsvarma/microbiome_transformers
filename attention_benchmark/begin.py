@@ -5,8 +5,7 @@ import numpy as np
 import torch
 from pretrain_hf import ELECTRATrainer
 from dataset import ELECTRADataset,create_class_weights,create_weighted_sampler
-from transformers import ElectraConfig,ElectraForSequenceClassification
-from electra_discriminator import ElectraDiscriminator
+from electra_discriminator import AttentionModel,ElectraModel
 from sklearn.model_selection import KFold
 
 def train():
@@ -88,9 +87,8 @@ def train():
 
         vocab_len = train_dataset.vocab_len()
     
-
-        electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=args.hidden*2,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=args.seq_len,num_labels=args.num_labels)
-        electra = ElectraDiscriminator(electra_config,torch.from_numpy(train_dataset.embeddings),args.load_disc,args.load_embed)
+        #pdb.set_trace()
+        electra = ElectraModel(torch.from_numpy(train_dataset.embeddings),args.load_embed)    
         print(electra)
         #pdb.set_trace()
         print("Creating Electra Trainer")

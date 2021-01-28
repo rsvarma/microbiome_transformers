@@ -85,14 +85,14 @@ def train():
 
 
     for i in range(len(args.load_gen)):
-        new_gen =  electra_gen = ElectraGenerator(electra_config,torch.from_numpy(train_dataset.embeddings),args.load_gen[i],args.load_g_embed[i])
+        new_gen = ElectraGenerator(electra_gen_config,torch.from_numpy(train_dataset.embeddings),args.load_gen[i],args.load_g_embed[i])
         trainer.swap_gen(new_gen,args.with_cuda,args.cuda_devices)
         trainer.save(0,args.output_path)
         for j in range(args.epochs):
             epoch_num = i*10+(j+1)
             trainer.train(epoch_num)
             trainer.test(epoch_num)
-        trainer.save((i+1)*10,args.output_path)
+        trainer.save((i+1)*args.epochs,args.output_path)
 
 if __name__ == "__main__":
     train()

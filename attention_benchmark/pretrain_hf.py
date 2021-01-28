@@ -6,8 +6,7 @@ from torch.utils.data import DataLoader
 from sklearn import metrics
 
 
-from electra_discriminator import ElectraDiscriminator
-from transformers import ElectraConfig,ElectraForSequenceClassification
+from electra_discriminator import AttentionModel
 import tqdm
 import pdb
 
@@ -16,7 +15,7 @@ class ELECTRATrainer:
     ELECTRATrainer make the pretrained ELECTRA model 
     """
 
-    def __init__(self, electra: ElectraDiscriminator, vocab_size: int,
+    def __init__(self, electra: AttentionModel, vocab_size: int,
                  train_dataloader: DataLoader, train_orig_dataloader: DataLoader, test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=10000,
                  with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,
@@ -44,11 +43,7 @@ class ELECTRATrainer:
         self.electra = self.electra.to(self.device)
         self.electra = self.electra.float()
         #pdb.set_trace()
-        if class_weights is not None:
-            class_weights.to(self.device)
-            self.loss = nn.CrossEntropyLoss(class_weights)
-        else:
-            self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.MSELoss()
 
         self.loss.to(self.device)
 
@@ -172,9 +167,9 @@ class ELECTRATrainer:
 
             
             # 1. forward the next_sentence_prediction and masked_lm model
-            unweighted_loss,scores = self.electra.forward(data["electra_input"],mask,data["electra_label"])            
+            scores = self.electra.forward(data["electra_input"],mask)              
             # 3. backward and optimization only in train
-            loss = self.loss(scores,data["electra_label"].squeeze())
+            loss = self.loss(scores,data["electra_label"].float())
             if train:
                 #self.optim_schedule.zero_grad()
                 #pdb.set_trace()
@@ -189,9 +184,7 @@ class ELECTRATrainer:
                 self.optim.step()
 
             all_scores.append(scores.detach().cpu())
-            predictions = scores.max(1).indices
-            #reshape to have same dimension as data["electra_label"]
-            predictions = predictions.unsqueeze(0).reshape(data["electra_label"].shape)
+            predictions = scores >= 0.5
        
             
             #get accuracy for all tokens
@@ -223,9 +216,9 @@ class ELECTRATrainer:
             del predictions
             del positive_inds
 
-        
-        auc_score = ELECTRATrainer.calc_auc(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores)[:,1].numpy())
-        aupr_score = ELECTRATrainer.calc_aupr(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores)[:,1].numpy())
+  
+        auc_score = ELECTRATrainer.calc_auc(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores).flatten().numpy())
+        aupr_score = ELECTRATrainer.calc_aupr(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores).flatten().numpy())
         print("EP{}_{}, avg_loss={}, accuracy={:.2f}%".format(epoch,str_code,cumulative_loss / len(data_iter),total_correct/total_samples*100))
         if self.log_file:
             with open(self.log_file,"a") as f:

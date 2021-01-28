@@ -19,6 +19,7 @@ import numpy as np
 import pdb
 import tqdm
 from sklearn import metrics
+from sklearn.model_selection import KFold
 from sklearn.metrics import roc_curve
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import preprocessing
@@ -48,6 +49,20 @@ def calc_auc(y_true,y_probas,show_plot=False):
     return auc_score
 
 
+def calc_aupr(y_true,y_probas,show_plot=False):
+    precision, recall, thresholds = metrics.precision_recall_curve(y_true,y_probas,pos_label = 1)
+    aupr_score = metrics.auc(recall,precision)
+    if show_plot:
+        plt.figure()
+        plt.plot(recall, precision)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Receiver operating characteristic')
+        plt.show()    
+    return aupr_score    
+
 
 
 class Net(nn.Module):
@@ -61,15 +76,15 @@ class Net(nn.Module):
         return x
         
 
-def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_dim,lr,log_file,epoch_num):
+def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,log_file,epoch_num):
     with open(log_file,"w+") as f:
-        f.write("EPOCH,MODE, AVG LOSS, TOTAL CORRECT, TOTAL ELEMENTS, ACCURACY, AUC, TOTAL POSITIVE CORRECT, TOTAL POSITIVE, ACCURACY\n")
+        f.write("EPOCH,MODE, AVG LOSS, TOTAL CORRECT, TOTAL ELEMENTS, ACCURACY, AUC, AUPR, TOTAL POSITIVE CORRECT, TOTAL POSITIVE, ACCURACY\n")
 
 
     net = Net(embed_dim)
     criterion = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(),lr=lr)
-    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     net = net.to(device)
     for epoch in range(epoch_num):
         total_train_correct = 0
@@ -80,7 +95,9 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
         total_test_positive_correct = 0
         total_test_positive = 0
         train_scores = []
+        train_w_labels = []
         test_scores = []
+        test_labels = []
         cumulative_loss = 0
 
         #device = "cpu"
@@ -93,6 +110,7 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
         #pdb.set_trace()
         net.train()                              
         for inputs,labels in data_iter:
+            train_w_labels.append(labels)
             inputs,labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             output = net(inputs.float()).flatten()
@@ -101,6 +119,7 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
             optimizer.step()
             predictions = output >= 0.5
             train_scores.append(output.detach().cpu())
+            
 
             cumulative_loss += loss.item()
 
@@ -110,13 +129,53 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
             positive_inds = labels.nonzero(as_tuple=True)
             total_train_positive_correct += torch.sum(predictions[positive_inds] == labels[positive_inds]).item()
             total_train_positive += labels.nonzero().shape[0]
-
-        auc_score = calc_auc(train_labels,torch.cat(train_scores).numpy())
+        #pdb.set_trace()
+        auc_score = calc_auc(torch.cat(train_w_labels).numpy(),torch.cat(train_scores).numpy())
+        aupr_score = calc_aupr(torch.cat(train_w_labels).numpy(),torch.cat(train_scores).numpy())
         with open(log_file,"a") as f:
-            f.write("{},{},{},{},{},{},{},{},{},{}\n".format(epoch,"train",cumulative_loss/len(train_dataloader),total_train_correct,total_train_samples,total_train_correct/total_train_samples*100,auc_score,total_train_positive_correct,total_train_positive,total_train_positive_correct/total_train_positive*100))
+            f.write("{},{},{},{},{},{},{},{},{},{},{}\n".format(epoch,"train",cumulative_loss/len(train_dataloader),total_train_correct,total_train_samples,total_train_correct/total_train_samples*100,auc_score,aupr_score,total_train_positive_correct,total_train_positive,total_train_positive_correct/total_train_positive*100))
 
         cumulative_loss = 0
 
+        total_train_correct = 0
+        total_train_samples = 0 
+        total_train_positive_correct = 0
+        total_train_positive = 0
+        train_scores = []
+        train_labels = []
+
+        # Setting the tqdm progress bar
+        data_iter = tqdm.tqdm(train_orig_loader,
+                              desc="EP_%s:%d" % ("train_orig", epoch),
+                              total=len(train_orig_loader),
+                              bar_format="{l_bar}{r_bar}")        
+        #pdb.set_trace()
+        net.eval()                              
+        for inputs,labels in data_iter:
+            train_labels.append(labels)
+            inputs,labels = inputs.to(device), labels.to(device)
+            output = net(inputs.float()).flatten()
+            loss = criterion(output,labels.float())
+            predictions = output >= 0.5
+            train_scores.append(output.detach().cpu())
+
+            cumulative_loss += loss.item()
+
+            total_train_correct += torch.sum(predictions == labels).item()
+            total_train_samples += labels.shape[0]
+
+            positive_inds = labels.nonzero(as_tuple=True)
+            #pdb.set_trace()
+            total_train_positive_correct += torch.sum(predictions[positive_inds] == labels[positive_inds]).item()
+            total_train_positive += labels.nonzero().shape[0]
+
+        auc_score = calc_auc(torch.cat(train_labels).numpy(),torch.cat(train_scores).numpy())
+        aupr_score = calc_aupr(torch.cat(train_labels).numpy(),torch.cat(train_scores).numpy())
+        with open(log_file,"a") as f:
+            f.write("{},{},{},{},{},{},{},{},{},{},{}\n".format(epoch,"train_orig",cumulative_loss/len(train_dataloader),total_train_correct,total_train_samples,total_train_correct/total_train_samples*100,auc_score,aupr_score,total_train_positive_correct,total_train_positive,total_train_positive_correct/total_train_positive*100))
+
+        cumulative_loss = 0
+        total_test_samples = 0
         #pdb.set_trace()
         data_iter = tqdm.tqdm(test_dataloader,
                               desc="EP_%s:%d" % ("test", epoch),
@@ -124,6 +183,7 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
                               bar_format="{l_bar}{r_bar}")       
         net.eval()   
         for inputs,labels in data_iter:
+            test_labels.append(labels)
             inputs,labels = inputs.to(device), labels.to(device)
             output = net(inputs.float()).flatten()
             loss = criterion(output,labels.float())
@@ -131,14 +191,16 @@ def dense_layer(train_dataloader,test_dataloader,train_labels,test_labels,embed_
             predictions = output >= 0.5
             test_scores.append(output.detach().cpu())
 
+            total_test_samples += labels.shape[0]
             total_test_correct += torch.sum(predictions == labels).item()
 
             positive_inds = labels.nonzero(as_tuple=True)
             total_test_positive_correct += torch.sum(predictions[positive_inds] == labels[positive_inds]).item()
             total_test_positive += labels.nonzero().shape[0]
-        auc_score = calc_auc(test_labels,torch.cat(test_scores).numpy())        
+        auc_score = calc_auc(torch.cat(test_labels).numpy(),torch.cat(test_scores).numpy())
+        aupr_score = calc_aupr(torch.cat(test_labels).numpy(),torch.cat(test_scores).numpy())         
         with open(log_file,"a") as f:
-            f.write("{},{},{},{},{},{},{},{},{},{}\n".format(epoch,"test",cumulative_loss/len(test_dataloader),total_test_correct,len(test_dataloader),total_test_correct/len(test_dataloader)*100,auc_score,total_test_positive_correct,total_test_positive,total_test_positive_correct/total_test_positive*100))
+            f.write("{},{},{},{},{},{},{},{},{},{},{}\n".format(epoch,"test",cumulative_loss/len(test_dataloader),total_test_correct,total_test_samples,total_test_correct/total_test_samples*100,auc_score,aupr_score,total_test_positive_correct,total_test_positive,total_test_positive_correct/total_test_positive*100))
 
 
 def computeMLstats(m, data, y, plot = False, plot_pr = False, graph_title = None, flipped = False):
@@ -153,9 +215,13 @@ def computeMLstats(m, data, y, plot = False, plot_pr = False, graph_title = None
     fpr, tpr, thresholds = metrics.roc_curve(y, probs[:, 1])
     roc_auc = metrics.auc(fpr, tpr)
 
+
+
+
     
     #Compute precision-recall
     precision, recall, _ = metrics.precision_recall_curve(y, probs[:,1])
+    aupr_score = metrics.auc(recall,precision)
 
     #avg_pr = average_precision_score(precision, recall)
     average_precision = metrics.average_precision_score(y, probs[:,1])
@@ -191,7 +257,7 @@ def computeMLstats(m, data, y, plot = False, plot_pr = False, graph_title = None
         plt.ylim([0.0, 1.05])
         plt.xlim([0.0, 1.0])
     
-    return(roc_auc, fpr, tpr, average_precision, f1, f2)
+    return(roc_auc,aupr_score, fpr, tpr, average_precision, f1, f2)
 
 
 
@@ -201,8 +267,8 @@ def predictIBD(X_train, y_train, X_test, y_test, graph_title = "IBD Tests", max_
     m.fit(X_train, y_train)
     probs = m.predict_proba(X_test)
     probs_train = m.predict_proba(X_train)
-    roc_auc, fpr, tpr, precision, f1, f2 = computeMLstats(m, data = X_test, y = y_test, plot = plot, plot_pr = plot_pr, graph_title = "IBD test", flipped = flipped)
-    roc_auc, fpr, tpr, precision, f1, f2 = computeMLstats(m, data = X_train, y = y_train, plot = plot, plot_pr = plot_pr, graph_title = "IBD train", flipped = flipped)
+    roc_auc,aupr, fpr, tpr, precision, f1, f2 = computeMLstats(m, data = X_test, y = y_test, plot = plot, plot_pr = plot_pr, graph_title = "IBD test", flipped = flipped)
+    roc_auc,aupr, fpr, tpr, precision, f1, f2 = computeMLstats(m, data = X_train, y = y_train, plot = plot, plot_pr = plot_pr, graph_title = "IBD train", flipped = flipped)
     plt.show()
 
     #feat_imp_sort = getFeatureImportance(m, data = X_train, y = y_train)
@@ -211,41 +277,32 @@ def predictIBD(X_train, y_train, X_test, y_test, graph_title = "IBD Tests", max_
 
 
 
-def embed_matrix(train_freqs,test_freqs,embeds):
+def embed_matrix(train_freqs,embeds):
     train_freqs = np.arcsinh(train_freqs)
-    test_freqs = np.arcsinh(test_freqs)
-    train_samples = (np.matmul(train_freqs,embeds))
-    test_samples = (np.matmul(test_freqs,embeds))    
+    train_samples = (np.matmul(train_freqs,embeds))   
     #train_samples = preprocessing.scale(np.matmul(train_freqs,embeds))
     #test_samples = preprocessing.scale(np.matmul(test_freqs,embeds))
 
-    return train_samples,test_samples
+    return train_samples
 
 
-def average(train_embeddings,test_embeddings):
+def average(train_embeddings):
     train_samples = preprocessing.scale(np.average(train_embeddings,axis=1))
-    test_samples = preprocessing.scale(np.average(test_embeddings,axis=1))
-    return train_samples, test_samples
+    return train_samples
 
-def weighted_average(train_embeddings,test_embeddings,train_freqs,test_freqs):
+def weighted_average(train_embeddings,train_freqs):
     train_weights = train_freqs/train_freqs.sum(1)[:,None]
-    test_weights = test_freqs/test_freqs.sum(1)[:,None]
     train_samples = np.zeros((train_embeddings.shape[0],train_embeddings.shape[2]))
     for i in range(train_embeddings.shape[0]):
-        train_samples[i] = np.average(train_embeddings[i],axis=0,weights=train_weights[i])
-    test_samples = np.zeros((test_embeddings.shape[0],test_embeddings.shape[2]))
-    for i in range(test_embeddings.shape[0]):
-        test_samples[i] = np.average(test_embeddings[i],axis=0,weights=test_weights[i])      
-    return train_samples, test_samples
+        train_samples[i] = np.average(train_embeddings[i],axis=0,weights=train_weights[i])    
+    return train_samples
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-tr", "--train_dataset", required=True, type=str, help="path to numpy array for train asv counts")
-    parser.add_argument("-te", "--test_dataset", required=True,type=str, help="path to numpy array for test asv counts")
+    parser.add_argument("-t", "--dataset", required=True, type=str, help="path to numpy array for asv counts")
     parser.add_argument("-ep", "--embedding_path", required=True, type=str, help="path to numpy array for GloVE embeddings")
-    parser.add_argument("-trl","--train_label", required=True,type=str,help="path to numpy array for training set labels")
-    parser.add_argument("-tel","--test_label",required=True,type=str,help="path to numpy array for testing set labels")
+    parser.add_argument("-l","--labels", required=True,type=str,help="path to numpy array for labels")
     parser.add_argument("-o", "--output_path", required=True, type=str, help="path to output log file")
     parser.add_argument("-b", "--batch_size", type=int, default=48, help="batch size for training dense layer")
     parser.add_argument("-e", "--epoch_num", type = int, default=20, help="number of epochs to train dense layer")
@@ -272,52 +329,52 @@ def main():
         parser.error('No classification head type specified, add --dense or --random_forest')
 
 
-    train_data = np.load(args.train_dataset)
-    test_data = np.load(args.test_dataset)
-    train_labels = np.load(args.train_label).flatten()
-    test_labels = np.load(args.test_label).flatten()
+    data = np.load(args.dataset)
+    labels = np.load(args.labels).flatten()
     embeds = np.load(args.embedding_path)
     embed_dim = embeds.shape[1]
-    log_file = args.output_path
+
 
     if not args.direct:
-        train_embeddings = np.zeros((train_data.shape[0],embeds.shape[0],embed_dim))
-        train_freqs = np.zeros((train_data.shape[0],embeds.shape[0]))
-        for i in range(train_data.shape[0]):
-            for j in range(train_data.shape[1]):
-                if train_data[i,j,1] > 0:
-                    train_embeddings[i,int(train_data[i,j,0])] = embeds[int(train_data[i,j,0])]
-                    train_freqs[i,int(train_data[i,j,0])] = train_data[i,j,1]
+        embeddings = np.zeros((data.shape[0],embeds.shape[0],embed_dim))
+        freqs = np.zeros((data.shape[0],embeds.shape[0]))
+        for i in range(data.shape[0]):
+            for j in range(data.shape[1]):
+                if data[i,j,1] > 0:
+                    embeddings[i,int(data[i,j,0])] = embeds[int(data[i,j,0])]
+                    freqs[i,int(data[i,j,0])] = data[i,j,1]
 
-
-        test_embeddings = np.zeros((test_data.shape[0],embeds.shape[0],embed_dim))
-        test_freqs = np.zeros((test_data.shape[0],embeds.shape[0]))
-        for i in range(test_data.shape[0]):
-            for j in range(test_data.shape[1]):
-                if test_data[i,j,1] > 0:
-                    test_embeddings[i,int(test_data[i,j,0])] = embeds[int(test_data[i,j,0])]
-                    test_freqs[i,int(test_data[i,j,0])] = test_data[i,j,1]
 
 
     if args.average:
-        train_samples,test_samples = average(train_embeddings,test_embeddings)
+        samples = average(embeddings)
     elif args.waverage:
-        train_samples,test_samples = weighted_average(train_embeddings,test_embeddings,train_freqs,test_freqs)
+        samples = weighted_average(embeddings,freqs)
     elif args.ematrix:
-        train_samples,test_samples = embed_matrix(train_freqs,test_freqs,embeds)
+        samples= embed_matrix(freqs, embeds)
     elif args.direct:
-        train_samples,test_samples = train_data,test_data
+        samples = data
+    #pdb.set_trace()
+    split_count = 1
+    kf = KFold(n_splits=5,shuffle=True,random_state=42)
+    for train_index,test_index in kf.split(samples):
+        log_file = args.output_path+"_valset"+str(split_count)+".txt"
+        train_samples = samples[train_index]
+        train_labels = labels[train_index]
+        test_samples = samples[test_index]
+        test_labels = labels[test_index]
+        train_dataset = data_utils.TensorDataset(torch.from_numpy(train_samples),torch.from_numpy(train_labels))
+        train_sampler = create_weighted_sampler(train_labels)
+        train_loader = data_utils.DataLoader(train_dataset,sampler=train_sampler,batch_size=args.batch_size)
+        train_orig_loader = data_utils.DataLoader(train_dataset,batch_size=args.batch_size,shuffle=False)
+        test_dataset = data_utils.TensorDataset(torch.from_numpy(test_samples),torch.from_numpy(test_labels))
+        test_loader = data_utils.DataLoader(test_dataset,batch_size=35,shuffle=False)
 
-    train_dataset = data_utils.TensorDataset(torch.from_numpy(train_samples),torch.from_numpy(train_labels))
-    train_sampler = create_weighted_sampler(train_labels)
-    train_loader = data_utils.DataLoader(train_dataset,sampler=train_sampler,batch_size=args.batch_size)
-    test_dataset = data_utils.TensorDataset(torch.from_numpy(test_samples),torch.from_numpy(test_labels))
-    test_loader = data_utils.DataLoader(test_dataset,batch_size=1,shuffle=False)
-
-    if args.dense:
-        dense_layer(train_loader,test_loader,train_labels,test_labels,embed_dim,args.lr,args.output_path,args.epoch_num)
-    elif args.random_forest:
-        predictIBD(train_samples,train_labels,test_samples,test_labels)
+        if args.dense:
+            dense_layer(train_loader,train_orig_loader,test_loader,embed_dim,args.lr,log_file,args.epoch_num)
+        elif args.random_forest:
+            predictIBD(train_samples,train_labels,test_samples,test_labels)
+        split_count += 1
 
 main()
 

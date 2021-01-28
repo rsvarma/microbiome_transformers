@@ -52,8 +52,8 @@ class ELECTRATrainer:
         # Setting the Adam optimizer with hyper-param
         #self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         #self.optim_schedule = ScheduledOptim(self.optim, self.electra.hidden, n_warmup_steps=warmup_steps)
-        #self.optim = SGD(self.electra.parameters(),lr=lr,momentum=0.9)
-        self.optim = Adam(self.electra.parameters(),lr=lr,eps=1e-06)
+        self.optim = SGD(self.electra.parameters(),lr=lr,momentum=0.9)
+        #self.optim = Adam(self.electra.parameters(),lr=lr,eps=1e-06)
 
         self.log_freq = log_freq
 

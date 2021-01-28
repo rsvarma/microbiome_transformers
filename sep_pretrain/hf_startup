@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J ELECTRA15epochf5head
+#SBATCH -J ELECTRA1layerdisc
 
 #SBATCH -A eecs
 
@@ -8,9 +8,9 @@
 
 #SBATCH --gres=gpu:2
 
-#SBATCH -o ELECTRA15epochf5head.out
+#SBATCH -o ELECTRA1layerdisc.out
 
-#SBATCH -e ELECTRA15epochf5head.err
+#SBATCH -e ELECTRA1layerdisc.err
 
 #SBATCH --mail-type=BEGIN,END,FAIL
 
@@ -18,6 +18,15 @@
 
 source ~/guille/torch10.1/bin/activate
 
-python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/discsgdlr1e2/10head5layer15epochfreeze -b 32 -l 5 -a 10 -e 15 -s 513 -gs 513 --cuda --d_log_file ~/models/discsgdlr1e2/10head5layer15epochfreeze.txt \
---load_gen ~/models/basegen/test_epoch30_gen/pytorch_model.bin ~/models/basegen/test_epoch60_gen/pytorch_model.bin ~/models/basegen/test_epoch90_gen/pytorch_model.bin ~/models/basegen/test_epoch120_gen/pytorch_model.bin ~/models/basegen/test_epoch150_gen/pytorch_model.bin \
---load_g_embed ~/models/basegen/test_epoch30gen_embed ~/models/basegen/test_epoch60gen_embed ~/models/basegen/test_epoch90gen_embed ~/models/basegen/test_epoch120gen_embed ~/models/basegen/test_epoch150gen_embed --freeze
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/discsgdlr1e2/frozen_embeds/240epgen/10head1layer -b 32 -l 1 -a 10 -e 15 -s 513 -gl 10 -ga 10 -gs 513 --cuda --d_log_file ~/models/discsgdlr1e2/frozen_embeds/240epgen/10head1layer.txt \
+--load_gen ~/models/gensgdlr1e2/gen_epoch29_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch59_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch89_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch119_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch149_gen/pytorch_model.bin \
+~/models/gensgdlr1e2/gen_epoch179_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch209_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch239_gen/pytorch_model.bin \
+--load_g_embed ~/models/gensgdlr1e2/gen_epoch29_gen_embed ~/models/gensgdlr1e2/gen_epoch59_gen_embed ~/models/gensgdlr1e2/gen_epoch89_gen_embed ~/models/gensgdlr1e2/gen_epoch119_gen_embed ~/models/gensgdlr1e2/gen_epoch149_gen_embed  \
+ ~/models/gensgdlr1e2/gen_epoch179_gen_embed ~/models/gensgdlr1e2/gen_epoch209_gen_embed ~/models/gensgdlr1e2/gen_epoch239_gen_embed --freeze
+
+
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head1layer -b 32 -l 1 -a 5 -e 15 -s 513 -gl 10 -ga 10 -gs 513 --cuda --d_log_file ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head1layer.txt \
+--load_gen ~/models/gensgdlr1e2/gen_epoch29_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch59_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch89_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch119_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch149_gen/pytorch_model.bin \
+~/models/gensgdlr1e2/gen_epoch179_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch209_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch239_gen/pytorch_model.bin \
+--load_g_embed ~/models/gensgdlr1e2/gen_epoch29_gen_embed ~/models/gensgdlr1e2/gen_epoch59_gen_embed ~/models/gensgdlr1e2/gen_epoch89_gen_embed ~/models/gensgdlr1e2/gen_epoch119_gen_embed ~/models/gensgdlr1e2/gen_epoch149_gen_embed  \
+ ~/models/gensgdlr1e2/gen_epoch179_gen_embed ~/models/gensgdlr1e2/gen_epoch209_gen_embed ~/models/gensgdlr1e2/gen_epoch239_gen_embed --freeze

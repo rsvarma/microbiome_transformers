@@ -37,7 +37,7 @@ def train():
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
     parser.add_argument("--log_file", type=str,default=None,help="log file for performance metrics" )
 
-    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate of adam")
+    parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of adam")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="adam first beta value")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")

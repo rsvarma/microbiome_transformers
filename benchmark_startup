@@ -1,0 +1,6 @@
+#!/bin/bash
+
+python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/benchmark_512_average_48/benchmark_512_average_48 -e 100 -b 48 --dense --average
+
+
+

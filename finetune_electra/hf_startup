@@ -18,4 +18,6 @@
 
 #source ~/guille/torch10.1/bin/activate
 
-python begin.py -c ~/guille/IBD_train_512.npy -t ~/guille/IBD_test_512.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o ~/models/discsgdlr1e2/nodiscibd/ibd1l10h -b 32 -l 1 -e 20 -a 10 --cuda --log_file ~/models/discsgdlr1e2/nodiscibd/ibd1l10h.txt --num_labels=2 -s 513 --freeze
+python begin.py -t ~/guille/total_IBD_512.npy -tl ~/guille/total_IBD_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e2/partially_frozen/no_disc/ibd1l1h/ibd1l1h -b 32 -l 1 -e 50 -a 1 --cuda --log_file  ~/models/finesgdlr1e2/partially_frozen/no_disc/ibd1l1h/ibd1l1h --num_labels=2 --freeze_opt 2 --weighted_sampler -s 513
+
+#python begin.py -c ~/guille/IBD_train_512.npy -t ~/guille/IBD_test_512.npy -tl ~/guille/IBD_train_label.npy -tel ~/guille/IBD_test_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e2/complete_frozen/no_disc/ibd1l5ha -b 32 -l 1 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e2/complete_frozen/no_disc/ibd1l5ha.txt --num_labels=2 -s 513 --freeze_opt 1 --weighted_sampler 

@@ -1,16 +1,16 @@
 #!/bin/bash
 
-#SBATCH -J ELECTRAEXTEND
+#SBATCH -J ELECTRAGEN
 
 #SBATCH -A eecs
 
 #SBATCH -p dgx2
 
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:2
 
-#SBATCH -o ELECTRAGENEXTEND.out
+#SBATCH -o ELECTRAGEN.out
 
-#SBATCH -e ELECTRAGENEXTEND.err
+#SBATCH -e ELECTRAGEN.err
 
 #SBATCH --mail-type=BEGIN,END,FAIL
 
@@ -18,4 +18,5 @@
 
 source ~/guille/torch10.1/bin/activate
 
-python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/basegen/basegenextend -b 32 -l 10 -e 60 -a 10 -s 513 --cuda --log_file ~/models/basegen/basegenextend.txt --load_gen ~/models/basegen/test_epoch150_gen/pytorch_model.bin --load_g_embed ~/models/basegen/test_epoch150gen_embed
+python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_512.npy -v ~/guille/vocab_embeddings.npy -o ~/models/gensgdlr1e2/gen -b 32 -l 10 -e 200 -a 10 -s 513 --cuda --log_file ~/models/gensgdlr1e2/gen.txt \
+--resume_epoch 200 --load_gen ~/models/gensgdlr1e2/gen_epoch199_gen/pytorch_model.bin --load_g_embed ~/models/gensgdlr1e2/gen_epoch199_gen_embed
