@@ -13,7 +13,7 @@ import sys
 import torch
 import torch.nn as nn
 import torch.utils.data as data_utils
-import torch.optim as optim
+from torch.optim import SGD
 import sklearn
 import numpy as np
 import pdb
@@ -25,6 +25,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from inspect import signature
+from transformers import AdamW,get_constant_schedule_with_warmup
 
 def create_weighted_sampler(labels):
     labels_unique, counts = np.unique(labels,return_counts=True)
@@ -74,17 +75,39 @@ class Net(nn.Module):
     def forward(self,x):
         x = torch.sigmoid(self.fc1(x))
         return x
+
+class CENet(nn.Module):
+
+    def __init__(self,input_dim):
+        super(CENet, self).__init__()
+        self.fc1 = nn.Linear(input_dim,2)
+        self.softmax = nn.Softmax()
+
+    def forward(self,x):
+        x = self.softmax(self.fc1(x))
+        return x        
         
 
-def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,log_file,epoch_num):
+def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,log_file,epoch_num,cross_entropy=False,optim='sgd',betas=(0.9, 0.999), weight_decay = 0.01,warmup_steps=2000):
     with open(log_file,"w+") as f:
         f.write("EPOCH,MODE, AVG LOSS, TOTAL CORRECT, TOTAL ELEMENTS, ACCURACY, AUC, AUPR, TOTAL POSITIVE CORRECT, TOTAL POSITIVE, ACCURACY\n")
 
-
-    net = Net(embed_dim)
-    criterion = nn.MSELoss()
-    optimizer = optim.SGD(net.parameters(),lr=lr)
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    if cross_entropy:
+        net = CENet(embed_dim)
+        criterion = nn.CrossEntropyLoss()
+    else:
+        net = Net(embed_dim)
+        criterion = nn.MSELoss()
+    optim_scheduler = None
+    if optim == 'adam':
+    # Setting the Adam optimizer with hyper-param
+        print("USING ADAM OPTIMIZER, LR: {}".format(lr))
+        optimizer = AdamW(net.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
+        optim_scheduler = get_constant_schedule_with_warmup(optimizer,warmup_steps)
+    elif optim == "sgd":      
+        print("USING SGD OPTIMIZER, LR: {}".format(lr))     
+        optimizer = SGD(net.parameters(),lr=lr)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net = net.to(device)
     for epoch in range(epoch_num):
         total_train_correct = 0
@@ -113,12 +136,21 @@ def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,
             train_w_labels.append(labels)
             inputs,labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
-            output = net(inputs.float()).flatten()
-            loss = criterion(output,labels.float())
+            if cross_entropy:
+                output = net(inputs.float())
+                loss = criterion(output,labels.squeeze())
+                predictions = output[:,1] >= 0.5
+                train_scores.append(output[:,1].detach().cpu())
+            else:
+                output = net(inputs.float()).flatten()
+                loss = criterion(output,labels.float())
+                predictions = output >= 0.5
+                train_scores.append(output.detach().cpu())
             loss.backward()
             optimizer.step()
-            predictions = output >= 0.5
-            train_scores.append(output.detach().cpu())
+            if optim_scheduler is not None:
+                optim_scheduler.step()
+
             
 
             cumulative_loss += loss.item()
@@ -129,7 +161,6 @@ def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,
             positive_inds = labels.nonzero(as_tuple=True)
             total_train_positive_correct += torch.sum(predictions[positive_inds] == labels[positive_inds]).item()
             total_train_positive += labels.nonzero().shape[0]
-        #pdb.set_trace()
         auc_score = calc_auc(torch.cat(train_w_labels).numpy(),torch.cat(train_scores).numpy())
         aupr_score = calc_aupr(torch.cat(train_w_labels).numpy(),torch.cat(train_scores).numpy())
         with open(log_file,"a") as f:
@@ -154,10 +185,16 @@ def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,
         for inputs,labels in data_iter:
             train_labels.append(labels)
             inputs,labels = inputs.to(device), labels.to(device)
-            output = net(inputs.float()).flatten()
-            loss = criterion(output,labels.float())
-            predictions = output >= 0.5
-            train_scores.append(output.detach().cpu())
+            if cross_entropy:
+                output = net(inputs.float())
+                loss = criterion(output,labels.squeeze())
+                predictions = output[:,1] >= 0.5
+                train_scores.append(output[:,1].detach().cpu())
+            else:
+                output = net(inputs.float()).flatten()
+                loss = criterion(output,labels.float())
+                predictions = output >= 0.5
+                train_scores.append(output.detach().cpu())
 
             cumulative_loss += loss.item()
 
@@ -185,11 +222,19 @@ def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,
         for inputs,labels in data_iter:
             test_labels.append(labels)
             inputs,labels = inputs.to(device), labels.to(device)
-            output = net(inputs.float()).flatten()
-            loss = criterion(output,labels.float())
+            if cross_entropy:
+                output = net(inputs.float())
+                loss = criterion(output,labels.squeeze())
+                predictions = output[:,1] >= 0.5
+                test_scores.append(output[:,1].detach().cpu())
+            else:
+                output = net(inputs.float()).flatten()
+                loss = criterion(output,labels.float())
+                predictions = output >= 0.5
+                test_scores.append(output.detach().cpu())
+
+                
             cumulative_loss += loss.item()
-            predictions = output >= 0.5
-            test_scores.append(output.detach().cpu())
 
             total_test_samples += labels.shape[0]
             total_test_correct += torch.sum(predictions == labels).item()
@@ -308,6 +353,15 @@ def main():
     parser.add_argument("-e", "--epoch_num", type = int, default=20, help="number of epochs to train dense layer")
     parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of dense layer")
 
+    parser.add_argument("--ce",dest='cross_entropy',action='store_true',help="train with cross entropy loss")
+    parser.add_argument("--mse",dest='cross_entropy',action='store_false',help="train with mse loss")
+    parser.set_defaults(cross_entropy=False)
+
+
+    parser.add_argument("--adam",dest='optim',action='store_const',const='adam',help="train with adam optimizer")
+    parser.add_argument("--sgd",dest='optim',action='store_const',const='sgd',help="train with sgd")
+    parser.set_defaults(optim='sgd')
+
     class_head = parser.add_mutually_exclusive_group()
     class_head.add_argument("--dense",action='store_true',help="choose dense layer as classification head")
     class_head.add_argument("--random_forest", action='store_true', help="choose random forest as classification head")
@@ -371,7 +425,7 @@ def main():
         test_loader = data_utils.DataLoader(test_dataset,batch_size=35,shuffle=False)
 
         if args.dense:
-            dense_layer(train_loader,train_orig_loader,test_loader,embed_dim,args.lr,log_file,args.epoch_num)
+            dense_layer(train_loader,train_orig_loader,test_loader,embed_dim,args.lr,log_file,args.epoch_num,args.cross_entropy,args.optim)
         elif args.random_forest:
             predictIBD(train_samples,train_labels,test_samples,test_labels)
         split_count += 1

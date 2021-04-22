@@ -89,7 +89,8 @@ def train():
         trainer.swap_gen(new_gen,args.with_cuda,args.cuda_devices)
         trainer.save(0,args.output_path)
         for j in range(args.epochs):
-            epoch_num = i*10+(j+1)
+            epoch_num = i*args.epochs+(j+1)
+            #print(epoch_num)
             trainer.train(epoch_num)
             trainer.test(epoch_num)
         trainer.save((i+1)*args.epochs,args.output_path)

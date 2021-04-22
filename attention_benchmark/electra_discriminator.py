@@ -180,7 +180,6 @@ class ElectraModel(nn.Module):
         self.fc2 = nn.Linear(embeddings.shape[1]*2,1)
 
 
-
     def forward(self,data,attention_mask):
         #pdb.set_trace()
         data = self.embed_layer(data)
@@ -190,3 +189,31 @@ class ElectraModel(nn.Module):
         scores = self.fc2(scores)
         scores = torch.sigmoid(scores)
         return scores        
+
+
+class ElectraModelCrossEntropy(nn.Module):
+
+    def __init__(self, embeddings, embed_layer = None):
+        super().__init__()
+        self.embed_layer = nn.Embedding(num_embeddings=embeddings.shape[0],embedding_dim=embeddings.shape[1],padding_idx = embeddings.shape[0]-1)
+        if embed_layer:
+            self.embed_layer.load_state_dict(torch.load(embed_layer))
+        else:
+            self.embed_layer.weight = nn.Parameter(embeddings)
+        self.attention = EncoderProjectDoubleIntermediate(embeddings.shape[1])
+        self.fc1 = nn.Linear(embeddings.shape[1]*2,embeddings.shape[1]*2)
+        self.dropout = nn.Dropout(p=0.1)
+        self.fc2 = nn.Linear(embeddings.shape[1]*2,2)
+        self.softmax = nn.Softmax()
+
+
+
+    def forward(self,data,attention_mask):
+        #pdb.set_trace()
+        data = self.embed_layer(data)
+        embeds = self.attention(data,attention_mask)
+        scores = self.fc1(embeds[:,0,:])
+        scores = self.dropout(scores)
+        scores = self.fc2(scores)
+        scores = self.softmax(scores)
+        return scores          

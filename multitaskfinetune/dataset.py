@@ -1,21 +1,22 @@
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,WeightedRandomSampler
 import tqdm
 import torch
 import random
 import pdb
 import numpy as np
 
-class BERTDataset(Dataset):
-    def __init__(self, samples_path, embedding_path):
+class ELECTRADataset(Dataset):
+    def __init__(self, samples, embedding_path,labels):
         self.embeddings = np.load(embedding_path)
-        self.samples = np.load(samples_path)
+        self.samples = samples
+        self.labels = labels
         self.seq_len = self.samples.shape[1]+1
-
         #Initialize cls token vector values
+        #pdb.set_trace()
 
         #take average of all embeddings
-        self.cls = np.average(self.embeddings,axis=0)
-
+        #self.cls = np.average(self.embeddings,axis=0)
+        self.cls = np.zeros(self.embeddings.shape[1])
         self.frequency_index = self.samples.shape[2] - 1 
         self.cls_frequency = 1
 
@@ -52,57 +53,28 @@ class BERTDataset(Dataset):
         sample = sample[sorted_indices][::-1]
         cls_marker = np.array([[self.cls_index,self.cls_frequency]],dtype=np.float)
         sample = np.concatenate((cls_marker,sample))
-        bert_input,bert_label,frequencies,mask_locations = self.match_sample_to_embedding(sample)
+        electra_input,frequencies = self.match_sample_to_embedding(sample)
+        electra_label = self.labels[item]
 
-   
-        output = {"bert_input": torch.tensor(bert_input,dtype=torch.float),
-                  "bert_label": torch.tensor(bert_label,dtype=torch.long),
-                  "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
-                  "mask_locations": torch.tensor(mask_locations)
-                  }
+        output = {"electra_input": torch.tensor(electra_input,dtype=torch.long),
+                "electra_label": torch.tensor(electra_label,dtype=torch.long),
+                "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
+                }
 
         return output
 
     def match_sample_to_embedding(self, sample):
-        output_label = []
-        bert_input = np.zeros((sample.shape[0],self.embeddings.shape[1]))
+        electra_input = sample[:,0].copy()
         frequencies = np.zeros(sample.shape[0])
-        mask_locations = np.full(sample.shape[0],False)
-        masked = False
         for i in range(sample.shape[0]):
             #pdb.set_trace()
             if sample[i,self.frequency_index] > 0:
-                bert_input[i] = self.embeddings[int(sample[i,0])]
                 frequencies[i] = sample[i,self.frequency_index]
-                prob = random.random()
-                if prob < 0.15 and i > 0 and sample[i,self.frequency_index] > 50:
-                    prob /= 0.15
-
-                    # 80% randomly change token to mask token
-                    if prob < 0.8  and masked == False:
-                        bert_input[i] = self.mask
-
-                        #position embedding branch, so not limiting masks
-                        masked = True
-
-
-                    # 10% randomly change token to random token
-                    elif prob < 0.9:
-                        bert_input[i] = self.embeddings[random.randrange(self.embeddings.shape[0])]
-                        #append index of embedding to output label
-                        
-                    
-                    # 10% randomly change token to current token
-                    mask_locations[i] = True
-                    output_label.append(int(sample[i,0]))
-
-                else:
-                    output_label.append(int(sample[i,0]))
-
             else:
-                output_label.append(self.padding_index)
+                electra_input[i] = self.padding_index
+                
 
-        return bert_input, output_label,frequencies,mask_locations
+        return electra_input,frequencies
 
     def generate_random_frequency(self):
         return np.random.randint(self.frequency_min,self.frequency_max)
@@ -115,3 +87,18 @@ class BERTDataset(Dataset):
 
     def lookup_embedding(self,bug):
         return np.where(np.all(self.embeddings == bug,axis=1))[0][0]
+
+#for creating weighted random sampler
+def create_weighted_sampler(labels):
+    labels_unique, counts = np.unique(labels,return_counts=True)
+    class_weights = [sum(counts) / c for c in counts]
+    example_weights = [class_weights[int(e)] for e in labels]
+    sampler = WeightedRandomSampler(example_weights,len(labels))
+    return sampler
+
+#for using class weights in loss function
+def create_class_weights(labels):
+    labels_unique, counts = np.unique(labels,return_counts=True)
+    class_weights = [1 / c for c in counts]
+    print(class_weights)
+    return class_weights

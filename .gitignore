@@ -1,3 +1,7 @@
 __pycache__
 .vscode
 .npy
+.err
+.out
+electra_trace.py
+benchmark_startup_2

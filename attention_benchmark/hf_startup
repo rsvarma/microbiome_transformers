@@ -1,25 +1,25 @@
 #!/bin/bash
 
-#SBATCH -J ELECTRAlim100id
+#SBATCH -J AttentionBenchmarkCrossEntropy
 
 #SBATCH -A eecs
 
 #SBATCH -p dgx2
 
-#SBATCH --gres=gpu:8
+#SBATCH --gres=gpu:2
 
-#SBATCH -o ELECTRALIM100id.out
+#SBATCH -o AttentionBenchmarkCrossEntropy.out
 
-#SBATCH -e ELECTRALIM100id.err
+#SBATCH -e AttentionBenchmarkCrossEntropy.err
 
 #SBATCH --mail-type=BEGIN,END,FAIL
 
 #SBATCH --mail-user=varmar@oregonstate.edu
 
-#source ~/guille/torch10.1/bin/activate
+source ~/guille/torch10.1/bin/activate
 
 #python begin.py -t ~/guille/total_IBD_otu.npy -tl ~/guille/total_IBD_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/benchmarks/partially_frozen/changedvalattention/attention -b 48 -e 50 --cuda --log_file  ~/models/benchmarks/partially_frozen/changedvalattention/attention --freeze_opt 2 --weighted_sampler
 
-python begin.py -t ~/guille/total_IBD_512.npy -tl ~/guille/total_IBD_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/benchmarks/partially_frozen/electramimic/attention512 -b 48 -e 50 --cuda --log_file  ~/models/benchmarks/partially_frozen/electramimic/attention512 --freeze_opt 2 --weighted_sampler -s 513
+python begin.py -t ~/guille/total_IBD_512.npy -tl ~/guille/total_IBD_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/benchmarks/partially_frozen/hfdebug/attentionMSEsoftmax -b 48 -e 50 --cuda --log_file  ~/models/benchmarks/partially_frozen/hfdebug/attentionMSEsoftmax --freeze_opt 2 --weighted_sampler -s 513
 
  

@@ -1,3 +1,4 @@
+import os
 import argparse
 import pdb
 from torch.utils.data import DataLoader
@@ -15,7 +16,7 @@ def train():
     parser.add_argument("-t", "--samples", required=True, type=str, help="microbiome samples")
     parser.add_argument("-tl", "--sample_labels",required=True,type=str,default=None, help="labels for samples")
     parser.add_argument("-v", "--vocab_path", required=True, type=str, help="built vocab model path with electra-vocab")
-    parser.add_argument("-o", "--output_path", required=True, type=str, help="ex)output/")
+    parser.add_argument("-o", "--output_path", required=False, type=str,default=None, help="ex)output/")
 
     parser.add_argument("-hs", "--hidden", type=int, default=100, help="hidden size of transformer model")
     parser.add_argument("-l", "--layers", type=int, default=8, help="number of layers")
@@ -51,7 +52,8 @@ def train():
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
     parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
-    parser.add_argument("--log_file", type=str,default=None,help="log file for performance metrics" )
+    parser.add_argument("--log_dir", type=str,default=None,help="directory for logging performance metrics" )
+    parser.add_argument("--task_names", type=str,nargs='+', default=None, help="names of tasks being trained on, in same order as in given labels file")
 
     parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of adam")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
@@ -65,13 +67,17 @@ def train():
     parser.add_argument("--resume_epoch", type=int, default=0, help="epoch to resume training at")    
     args = parser.parse_args()
 
+
     samples = np.load(args.samples)
     labels = np.load(args.sample_labels)
 
     split_count = 1
     kf = KFold(n_splits=5,shuffle=True,random_state=42)
     for train_index,test_index in kf.split(samples):
-        log_file = args.log_file+"_valset"+str(split_count)+".txt"
+        log_files = []
+        for name in args.task_names:
+            file_path = os.path.join(args.log_dir,name)
+            log_files.append(file_path+"_valset"+str(split_count)+".txt")
         train_samples = samples[train_index]
         train_labels = labels[train_index]
         test_samples = samples[test_index]
@@ -89,8 +95,9 @@ def train():
 
 
         if args.class_imb_strat:
-            sampler = create_weighted_sampler(train_labels)
-            train_data_loader = DataLoader(train_dataset,sampler=sampler, batch_size=args.batch_size, num_workers=args.num_workers)
+            #sampler = create_weighted_sampler(train_labels)
+            #train_data_loader = DataLoader(train_dataset,sampler=sampler, batch_size=args.batch_size, num_workers=args.num_workers)
+            train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers)
         else:
             class_weights = create_class_weights(train_labels)
             train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers,shuffle=True)
@@ -102,19 +109,18 @@ def train():
     
 
         electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=args.hidden*2,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=args.seq_len,num_labels=args.num_labels)
-        electra = ElectraDiscriminator(electra_config,torch.from_numpy(train_dataset.embeddings),args.load_disc,args.load_embed)
+        electra = ElectraDiscriminator(electra_config,len(args.task_names),torch.from_numpy(train_dataset.embeddings),args.load_disc,args.load_embed)
         print(electra)
-        #pdb.set_trace()
         print("Creating Electra Trainer")
         if args.class_imb_strat:
-            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader, test_dataloader=test_data_loader,
+            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader,log_files=log_files, test_dataloader=test_data_loader,
                                 lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
-                                with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=log_file,
+                                with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,
                                 freeze_embed=args.freeze_opt,loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
         else:
-            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader, test_dataloader=test_data_loader,
+            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader,log_files=log_files, test_dataloader=test_data_loader,
                             lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
-                            with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,log_file=log_file,
+                            with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,
                             freeze_embed=args.freeze_opt,class_weights=torch.tensor(class_weights,dtype=torch.float),loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
 
         print("Training Start")

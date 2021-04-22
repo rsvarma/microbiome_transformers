@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
-from torch.optim import Adam
+from transformers import AdamW,get_constant_schedule_with_warmup
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from sklearn import metrics
 
 
+import os
 from electra_discriminator import ElectraDiscriminator
 from transformers import ElectraConfig,ElectraForSequenceClassification
 import tqdm
@@ -18,9 +19,9 @@ class ELECTRATrainer:
 
     def __init__(self, electra: ElectraDiscriminator, vocab_size: int,
                  train_dataloader: DataLoader, train_orig_dataloader: DataLoader, test_dataloader: DataLoader = None,
-                 lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=10000,
+                 lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=2000,
                  with_cuda: bool = True, cuda_devices=None, log_freq: int = 100, log_file=None,
-                 freeze_embed=0,class_weights=None):
+                 freeze_embed=0,class_weights=None,loss_func='mse',optim='sgd',hidden_size=None):
         """
         :param electra: ELECTRA model which you want to train
         :param vocab_size: total word vocab size
@@ -32,6 +33,8 @@ class ELECTRATrainer:
         :param with_cuda: traning with cuda
         :param log_freq: logging frequency of the batch iteration
         """
+        self.optim = optim
+        self.loss_func = loss_func
         self.softmax = torch.nn.Softmax()
         # Setup cuda device for ELECTRA training, argument -c, --cuda should be true
         cuda_condition = torch.cuda.is_available() and with_cuda
@@ -44,12 +47,17 @@ class ELECTRATrainer:
         self.electra = self.electra.to(self.device)
         self.electra = self.electra.float()
         #pdb.set_trace()
-        if class_weights is not None:
-            class_weights.to(self.device)
-            self.loss = nn.CrossEntropyLoss(class_weights)
-        else:
-            self.loss = nn.CrossEntropyLoss()
-
+        #for cross entropy loss
+        if self.loss_func == 'ce':
+            if class_weights is not None:
+                class_weights.to(self.device)
+                self.loss = nn.CrossEntropyLoss(class_weights)
+            else:
+                print("USING CROSS ENTROPY LOSS")
+                self.loss = nn.CrossEntropyLoss()
+        elif self.loss_func == 'mse':
+            print("USING MEAN SQUARED ERROR LOSS")
+            self.loss = nn.MSELoss()
         self.loss.to(self.device)
 
         #pdb.set_trace()
@@ -64,9 +72,7 @@ class ELECTRATrainer:
         self.train_orig_data = train_orig_dataloader
         self.test_data = test_dataloader
 
-        # Setting the Adam optimizer with hyper-param
-        #self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
-        #self.optim_schedule = ScheduledOptim(self.optim, self.electra.hidden, n_warmup_steps=warmup_steps)    
+
         if freeze_embed == 1:
             if self.hardware == "parallel":
                 self.electra.module.embed_layer.weight.requires_grad = False
@@ -74,7 +80,16 @@ class ELECTRATrainer:
                 self.electra.embed_layer.weight.requires_grad = False
         elif freeze_embed == 2:
             self.freeze_embed_idx = torch.arange(26726,dtype=torch.long).to(self.device)
-        self.optim = SGD([param for param in self.electra.parameters() if param.requires_grad == True],lr=lr,momentum=0.9)
+
+        self.scheduler = None
+        if self.optim == 'adam':
+        # Setting the Adam optimizer with hyper-param
+            print("USING ADAM OPTIMIZER, LR: {}".format(lr))
+            self.optim = AdamW([param for param in self.electra.parameters() if param.requires_grad == True], lr=lr, betas=betas, weight_decay=weight_decay)
+            self.scheduler = get_constant_schedule_with_warmup(self.optim,warmup_steps,)               
+        elif self.optim == 'sgd':
+            print("USING SGD OPTIMIZER, LR: {}".format(lr))
+            self.optim = SGD([param for param in self.electra.parameters() if param.requires_grad == True],lr=lr,momentum=0.9)
 
         self.log_freq = log_freq
 
@@ -115,19 +130,19 @@ class ELECTRATrainer:
             plt.show()    
         return aupr_score    
 
-    def train(self, epoch):
+    def train(self, epoch,multi):
         self.electra.train()
-        self.iteration(epoch, self.train_data,True,"train")
+        self.iteration(epoch, self.train_data,True,"train",multi)
 
-    def train_orig_dist(self,epoch):
+    def train_orig_dist(self,epoch,multi):
         self.electra.eval()
-        self.iteration(epoch,self.train_orig_data,False,"train_orig")
+        self.iteration(epoch,self.train_orig_data,False,"train_orig",multi)
 
-    def test(self, epoch):
+    def test(self, epoch,multi):
         self.electra.eval()
-        self.iteration(epoch, self.test_data,False,"test")
+        self.iteration(epoch, self.test_data,False,"test",multi)
 
-    def iteration(self, epoch, data_loader, train,str_code):
+    def iteration(self, epoch, data_loader, train,str_code,multi=False):
         """
         loop over the data_loader for training or testing
         if on train status, backward operation is activated
@@ -174,24 +189,36 @@ class ELECTRATrainer:
             # 1. forward the next_sentence_prediction and masked_lm model
             unweighted_loss,scores = self.electra.forward(data["electra_input"],mask,data["electra_label"])            
             # 3. backward and optimization only in train
-            loss = self.loss(scores,data["electra_label"].squeeze())
+            #pdb.set_trace()
+            #for mse loss
+            if self.loss_func == 'mse':
+                loss = self.loss(scores[:,1].unsqueeze(1),data["electra_label"].float())
+            #for cross entropy
+            elif self.loss_func == 'ce':
+                loss = self.loss(scores,data["electra_label"].squeeze())
             if train:
-                #self.optim_schedule.zero_grad()
-                #pdb.set_trace()
                 self.optim.zero_grad()
                 loss.backward()
-                #self.optim_schedule.step_and_update_lr()
                 if self.freeze_embed == 2:
                     if self.hardware == "parallel":
                         self.electra.module.embed_layer.weight.grad[self.freeze_embed_idx] = 0
                     else:
-                        self.electra.embed_layer.weight.grad[self.freeze_embed_idx] = 0
+                        self.electra.embed_layer.weight.grad[self.freeze_embed_idx] = 0                      
                 self.optim.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
-            all_scores.append(scores.detach().cpu())
-            predictions = scores.max(1).indices
-            #reshape to have same dimension as data["electra_label"]
-            predictions = predictions.unsqueeze(0).reshape(data["electra_label"].shape)
+            all_scores.append(scores[:,1].detach().cpu())
+
+            #for mse loss
+            if self.loss_func == 'mse':
+                predictions = scores[:,1].unsqueeze(1) >= 0.5
+
+            #for cross entropy
+            elif self.loss_func == 'ce':    
+                predictions = scores.max(1).indices
+                #reshape to have same dimension as data["electra_label"]  for cross entropy loss
+                predictions = predictions.unsqueeze(0).reshape(data["electra_label"].shape)
        
             
             #get accuracy for all tokens
@@ -223,9 +250,13 @@ class ELECTRATrainer:
             del predictions
             del positive_inds
 
+        auc_score = 0
+        aupr_score = 0
+        if not multi:
+            auc_score = ELECTRATrainer.calc_auc(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores).numpy())
+            aupr_score = ELECTRATrainer.calc_aupr(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores).numpy())       
         
-        auc_score = ELECTRATrainer.calc_auc(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores)[:,1].numpy())
-        aupr_score = ELECTRATrainer.calc_aupr(torch.cat(all_labels).flatten().numpy(),torch.cat(all_scores)[:,1].numpy())
+        
         print("EP{}_{}, avg_loss={}, accuracy={:.2f}%".format(epoch,str_code,cumulative_loss / len(data_iter),total_correct/total_samples*100))
         if self.log_file:
             with open(self.log_file,"a") as f:

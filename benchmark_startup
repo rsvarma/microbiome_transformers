@@ -1,6 +1,23 @@
 #!/bin/bash
 
-python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/benchmark_512_average_48/benchmark_512_average_48 -e 100 -b 48 --dense --average
+#SBATCH -J fruitvegbenchmarks
 
+#SBATCH -A eecs
 
+#SBATCH -p dgx2
 
+#SBATCH --gres=gpu:1
+
+#SBATCH -o fruitvegbenchmarks.out
+
+#SBATCH -e fruitvegbenchmarks.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/ibd/benchmark_512_average_32_sgd_lr1e2/benchmark_512_average_32_MSE -e 100 -b 32 --dense --average --mse --sgd --lr 0.01
+
+python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/ibd/benchmark_512_average_32_sgd_lr1e2/benchmark_512_average_32_CE -e 100 -b 32 --dense --average --ce --sgd --lr 0.01

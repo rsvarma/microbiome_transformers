@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#SBATCH -J 10layerdiscs
+
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:8
+
+#SBATCH -o 10layerdiscs.out
+
+#SBATCH -e 10layerdiscs.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg1l5h/veg1l5hCEbin34 -b 32 -l 1 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg1l5h/veg1l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --lr 0.001 --ce
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg3l5h/veg3l5hCEbin34 -b 32 -l 3 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg3l5h/veg3l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --lr 0.001 --ce
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg5l5h/veg5l5hCEbin34 -b 32 -l 5 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/veg5l5h/veg5l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --lr 0.001 --ce
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg1l5h/veg1l5hCEbin34 -b 32 -l 1 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg1l5h/veg1l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --lr 0.001 --ce
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg3l5h/veg3l5hCEbin34 -b 32 -l 3 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg3l5h/veg3l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --lr 0.001 --ce
+
+#python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg5l5h/veg5l5hCEbin34 -b 32 -l 5 -e 50 -a 5 --cuda --log_file  ~/models/finesgdlr1e3/partially_frozen/no_disc/veg5l5h/veg5l5hCEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --lr 0.001 --ce
+
+
+
+python begin.py -t ~/guille/VEGETABLE_FREQUENCY_otu_512.npy -tl ~/guille/VEGETABLE_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/veg5l5h/veg5l5hMSEbin34 -b 32 -l 5 -e 50 -a 5 --cuda --log_file  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/veg5l5h/veg5l5hMSEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --mse --adam --lr 0.01
+
+python begin.py -t ~/guille/total_IBD_512.npy -tl ~/guille/total_IBD_label.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/ibd5l5h/ibd5l5hMSEbin34 -b 32 -l 5 -e 50 -a 5 --cuda --log_file  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/ibd5l5h/ibd5l5hMSEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --mse --adam --lr 0.01

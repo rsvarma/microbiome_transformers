@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH -J 10layerdiscs
+
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:8
+
+#SBATCH -o 10layerdiscs.out
+
+#SBATCH -e 10layerdiscs.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python begin.py -t ~/guille/FRUIT_FREQUENCY_otu_512.npy -tl ~/guille/FRUIT_FREQUENCY_binary34_labels.npy -v ~/guille/vocab_embeddings.npy -o  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/fruit5l5h/fruit5l5hMSEbin34 -b 32 -l 5 -e 50 -a 5 --cuda --log_file  ~/models/fineadamlr1e2/partially_frozen/240epgen5head5layer/fruit5l5h/fruit5l5hMSEbin34 --freeze_opt 2 --weighted_sampler -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --mse --adam --lr 0.01

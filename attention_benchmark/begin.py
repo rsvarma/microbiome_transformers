@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from pretrain_hf import ELECTRATrainer
 from dataset import ELECTRADataset,create_class_weights,create_weighted_sampler
-from electra_discriminator import AttentionModel,ElectraModel
+from electra_discriminator import AttentionModel,ElectraModel,ElectraModelCrossEntropy
 from sklearn.model_selection import KFold
 
 def train():
