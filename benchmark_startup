@@ -21,3 +21,8 @@ source ~/guille/torch10.1/bin/activate
 python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/ibd/benchmark_512_average_32_sgd_lr1e2/benchmark_512_average_32_MSE -e 100 -b 32 --dense --average --mse --sgd --lr 0.01
 
 python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/ibd/benchmark_512_average_32_sgd_lr1e2/benchmark_512_average_32_CE -e 100 -b 32 --dense --average --ce --sgd --lr 0.01
+
+python benchmarks.py -t ~/guille/total_IBD_512.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/total_IBD_label.npy -o ~/models/benchmarks/ibd/random_forest --random_forest --average 
+
+
+python benchmarks.py -t ~/guille/christine_novaltrain_512_otu.npy -ep ~/guille/vocab_embeddings.npy -l ~/guille/christine_IBD_novaltrain_labels.npy --test_samples ~/guille/christine_test_512_otu.npy --test_labels ~/guille/christine_IBD_test_labels.npy -o ~/models/benchmarks/ibd/benchmark_512_average_32_sgd_lr1e2/benchmark_christineset_512_average_32_MSE -e 100 -b 32 --dense --average --mse --sgd --lr 0.01

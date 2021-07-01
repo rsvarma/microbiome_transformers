@@ -2,7 +2,7 @@
 #Author: Rohan Varma
 #
 #Command Line tool for benchmarking results on AGP microbiome data.
-#Allows testing of various sampleaggregation strategies including multiplying 
+#Allows testing of various sample aggregation strategies including multiplying 
 #counts by an embedding matrix, averaging together embeddings, and
 #weighted averaging of embeddings. Also allows to use a single dense layer
 #or a random forest classifier.
@@ -107,6 +107,7 @@ def dense_layer(train_dataloader,train_orig_loader,test_dataloader,embed_dim,lr,
     elif optim == "sgd":      
         print("USING SGD OPTIMIZER, LR: {}".format(lr))     
         optimizer = SGD(net.parameters(),lr=lr)
+    pdb.set_trace()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net = net.to(device)
     for epoch in range(epoch_num):
@@ -324,8 +325,8 @@ def predictIBD(X_train, y_train, X_test, y_test, graph_title = "IBD Tests", max_
 
 def embed_matrix(train_freqs,embeds):
     train_freqs = np.arcsinh(train_freqs)
-    train_samples = (np.matmul(train_freqs,embeds))   
-    #train_samples = preprocessing.scale(np.matmul(train_freqs,embeds))
+    #train_samples = (np.matmul(train_freqs,embeds))   
+    train_samples = preprocessing.scale(np.matmul(train_freqs,embeds))
     #test_samples = preprocessing.scale(np.matmul(test_freqs,embeds))
 
     return train_samples
@@ -352,6 +353,9 @@ def main():
     parser.add_argument("-b", "--batch_size", type=int, default=48, help="batch size for training dense layer")
     parser.add_argument("-e", "--epoch_num", type = int, default=20, help="number of epochs to train dense layer")
     parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of dense layer")
+
+    parser.add_argument("--test_samples",required=False,type=str,help="microbiome samples for test set, only provide if not trying to do cross validation. If providing this, --samples should provide the path to the training samples")
+    parser.add_argument("--test_labels",required=False,type=str,help="labels for test set, only provide if not wanting to perform cross validation. If provided --sample_labels should provide the path to the train labels")
 
     parser.add_argument("--ce",dest='cross_entropy',action='store_true',help="train with cross entropy loss")
     parser.add_argument("--mse",dest='cross_entropy',action='store_false',help="train with mse loss")
@@ -398,8 +402,6 @@ def main():
                     embeddings[i,int(data[i,j,0])] = embeds[int(data[i,j,0])]
                     freqs[i,int(data[i,j,0])] = data[i,j,1]
 
-
-
     if args.average:
         samples = average(embeddings)
     elif args.waverage:
@@ -408,27 +410,68 @@ def main():
         samples= embed_matrix(freqs, embeds)
     elif args.direct:
         samples = data
-    #pdb.set_trace()
-    split_count = 1
-    kf = KFold(n_splits=5,shuffle=True,random_state=42)
-    for train_index,test_index in kf.split(samples):
-        log_file = args.output_path+"_valset"+str(split_count)+".txt"
-        train_samples = samples[train_index]
-        train_labels = labels[train_index]
-        test_samples = samples[test_index]
-        test_labels = labels[test_index]
+
+    if args.test_samples and args.test_labels is not None: 
+        log_file = args.output_path+".txt"
+        test_data = np.load(args.test_samples)
+        test_labels = np.load(args.test_labels)
+
+        if not args.direct:
+            test_embeddings = np.zeros((test_data.shape[0],embeds.shape[0],embed_dim))
+            test_freqs = np.zeros((test_data.shape[0],embeds.shape[0]))
+            for i in range(test_data.shape[0]):
+                for j in range(test_data.shape[1]):
+                    if test_data[i,j,1] > 0:
+                        test_embeddings[i,int(test_data[i,j,0])] = embeds[int(test_data[i,j,0])]
+                        test_freqs[i,int(test_data[i,j,0])] = test_data[i,j,1]        
+
+        if args.average:
+            test_samples = average(test_embeddings)
+        elif args.waverage:
+            test_samples = weighted_average(test_embeddings,freqs)
+        elif args.ematrix:
+            test_samples= embed_matrix(test_freqs, embeds)
+        elif args.direct:
+            test_samples = test_data
+
+        train_samples = samples
+        train_labels = labels
+
         train_dataset = data_utils.TensorDataset(torch.from_numpy(train_samples),torch.from_numpy(train_labels))
         train_sampler = create_weighted_sampler(train_labels)
         train_loader = data_utils.DataLoader(train_dataset,sampler=train_sampler,batch_size=args.batch_size)
         train_orig_loader = data_utils.DataLoader(train_dataset,batch_size=args.batch_size,shuffle=False)
         test_dataset = data_utils.TensorDataset(torch.from_numpy(test_samples),torch.from_numpy(test_labels))
         test_loader = data_utils.DataLoader(test_dataset,batch_size=35,shuffle=False)
-
         if args.dense:
             dense_layer(train_loader,train_orig_loader,test_loader,embed_dim,args.lr,log_file,args.epoch_num,args.cross_entropy,args.optim)
         elif args.random_forest:
             predictIBD(train_samples,train_labels,test_samples,test_labels)
-        split_count += 1
+
+
+    elif args.test_samples is None and args.test_labels is None:
+
+
+        split_count = 1
+        kf = KFold(n_splits=5,shuffle=True,random_state=42)
+        for train_index,test_index in kf.split(samples):
+            log_file = args.output_path+"_valset"+str(split_count)+".txt"
+            train_samples = samples[train_index]
+            train_labels = labels[train_index]
+            test_samples = samples[test_index]
+            test_labels = labels[test_index]
+            train_dataset = data_utils.TensorDataset(torch.from_numpy(train_samples),torch.from_numpy(train_labels))
+            train_sampler = create_weighted_sampler(train_labels)
+            train_loader = data_utils.DataLoader(train_dataset,sampler=train_sampler,batch_size=args.batch_size)
+            train_orig_loader = data_utils.DataLoader(train_dataset,batch_size=args.batch_size,shuffle=False)
+            test_dataset = data_utils.TensorDataset(torch.from_numpy(test_samples),torch.from_numpy(test_labels))
+            test_loader = data_utils.DataLoader(test_dataset,batch_size=35,shuffle=False)
+
+            if args.dense:
+                dense_layer(train_loader,train_orig_loader,test_loader,embed_dim,args.lr,log_file,args.epoch_num,args.cross_entropy,args.optim)
+            elif args.random_forest:
+                predictIBD(train_samples,train_labels,test_samples,test_labels)
+            split_count += 1
 
 main()
 

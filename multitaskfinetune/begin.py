@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch
 from pretrain_hf import ELECTRATrainer
-from dataset import ELECTRADataset,create_class_weights,create_weighted_sampler
+from dataset import ELECTRADataset,create_weighted_sampler
 from transformers import ElectraConfig,ElectraForSequenceClassification
 from electra_discriminator import ElectraDiscriminator
 from sklearn.model_selection import KFold
@@ -45,9 +45,6 @@ def train():
     parser.add_argument("--sgd",dest='optim',action='store_const',const='sgd',help="train with sgd")
     parser.set_defaults(optim='sgd')
 
-    parser.add_argument("--weighted_sampler", dest='class_imb_strat', action='store_true',help="use weighted sampler")
-    parser.add_argument("--class_weights",dest='class_imb_strat',action='store_false',help="use class weights")
-    parser.set_defaults(class_imb_strat=False)    
 
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
     parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
@@ -78,13 +75,14 @@ def train():
         for name in args.task_names:
             file_path = os.path.join(args.log_dir,name)
             log_files.append(file_path+"_valset"+str(split_count)+".txt")
+        overall_log_file = os.path.join(args.log_dir,"log")+"_valset"+str(split_count)+".txt"
         train_samples = samples[train_index]
         train_labels = labels[train_index]
         test_samples = samples[test_index]
         test_labels = labels[test_index]
 
         print("Loading Train Dataset")
-        train_dataset = ELECTRADataset(train_samples, args.vocab_path,train_labels)
+        train_orig_dataset = ELECTRADataset(train_samples, args.vocab_path,train_labels)
 
         print("Loading Test Dataset")
         test_dataset = ELECTRADataset(test_samples, args.vocab_path,test_labels)
@@ -94,34 +92,28 @@ def train():
         print("Creating Dataloader")
 
 
-        if args.class_imb_strat:
-            #sampler = create_weighted_sampler(train_labels)
-            #train_data_loader = DataLoader(train_dataset,sampler=sampler, batch_size=args.batch_size, num_workers=args.num_workers)
-            train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers)
-        else:
-            class_weights = create_class_weights(train_labels)
-            train_data_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers,shuffle=True)
+        #pdb.set_trace()
+        train_data_loaders = []
+        for i in range(len(args.task_names)):
+            sampler = create_weighted_sampler(train_labels,i)
+            task_dataset = ELECTRADataset(train_samples, args.vocab_path,train_labels,i)
+            train_data_loaders.append(DataLoader(task_dataset,sampler=sampler, batch_size=args.batch_size//len(args.task_names), num_workers=args.num_workers))
 
-        train_orig_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers,shuffle=False)
-        test_data_loader = DataLoader(test_dataset, batch_size=35, num_workers=args.num_workers)
 
-        vocab_len = train_dataset.vocab_len()
+        train_orig_dataloader = DataLoader(train_orig_dataset, batch_size=args.batch_size, num_workers=args.num_workers,shuffle=False)
+        test_data_loader = DataLoader(test_dataset, batch_size=1, num_workers=args.num_workers)
+
+        vocab_len = train_orig_dataset.vocab_len()
     
 
         electra_config = ElectraConfig(vocab_size=vocab_len,embedding_size=args.hidden,hidden_size=args.hidden*2,num_hidden_layers=args.layers,num_attention_heads=args.attn_heads,intermediate_size=4*args.hidden,max_position_embeddings=args.seq_len,num_labels=args.num_labels)
-        electra = ElectraDiscriminator(electra_config,len(args.task_names),torch.from_numpy(train_dataset.embeddings),args.load_disc,args.load_embed)
+        electra = ElectraDiscriminator(electra_config,len(args.task_names),torch.from_numpy(train_orig_dataset.embeddings),args.load_disc,args.load_embed)
         print(electra)
         print("Creating Electra Trainer")
-        if args.class_imb_strat:
-            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader,log_files=log_files, test_dataloader=test_data_loader,
-                                lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
-                                with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,
-                                freeze_embed=args.freeze_opt,loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
-        else:
-            trainer = ELECTRATrainer(electra, vocab_len, train_dataloader=train_data_loader,train_orig_dataloader = train_orig_dataloader,log_files=log_files, test_dataloader=test_data_loader,
+        trainer = ELECTRATrainer(electra, vocab_len, train_dataloaders=train_data_loaders,train_orig_dataloader = train_orig_dataloader,task_log_files=log_files,log_file=overall_log_file, test_dataloader=test_data_loader,
                             lr=args.lr, betas=(args.adam_beta1, args.adam_beta2), weight_decay=args.adam_weight_decay,
                             with_cuda=args.with_cuda, cuda_devices=args.cuda_devices, log_freq=args.log_freq,
-                            freeze_embed=args.freeze_opt,class_weights=torch.tensor(class_weights,dtype=torch.float),loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
+                            freeze_embed=args.freeze_opt,loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
 
         print("Training Start")
         for epoch in range(args.resume_epoch,args.epochs):

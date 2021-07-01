@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH -J ibdvegfruit5l5hMSE21bal
+
+#SBATCH -A eecs
+
+#SBATCH -p dgx2
+
+#SBATCH --gres=gpu:1
+
+#SBATCH -o ibdvegfruit5l5hMSE21bal.out
+
+#SBATCH -e ibdvegfruit5l5hMSE21bal.err
+
+#SBATCH --mail-type=BEGIN,END,FAIL
+
+#SBATCH --mail-user=varmar@oregonstate.edu
+
+source ~/guille/torch10.1/bin/activate
+
+python begin.py -t ~/guille/ibd_veg_fruit_512_otu.npy -tl ~/guille/ibd_veg_fruit_labels.npy -v ~/guille/vocab_embeddings.npy -b 32 -l 5 -e 50 -a 5 --cuda --log_dir  ~/models/finesgdlr1e3/partially_frozen/240epgen5head5layer/ibdvegfruit5l5hMSE21bal --task_names ibd veg fruit --freeze_opt 2 -s 513 --num_labels 2 --load_disc ~/models/discsgdlr1e2/frozen_embeds/240epgen/5head5layer_epoch120_disc/pytorch_model.bin --mse --sgd --lr 0.001

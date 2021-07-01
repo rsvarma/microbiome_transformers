@@ -92,7 +92,10 @@ class ELECTRADataset(Dataset):
 def create_weighted_sampler(labels):
     labels_unique, counts = np.unique(labels,return_counts=True)
     class_weights = [sum(counts) / c for c in counts]
+    #class_weights[1] = class_weights[1]/2
     example_weights = [class_weights[int(e)] for e in labels]
+    #print("Example Weights:")
+    #print(example_weights)
     sampler = WeightedRandomSampler(example_weights,len(labels))
     return sampler
 

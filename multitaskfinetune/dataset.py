@@ -6,7 +6,7 @@ import pdb
 import numpy as np
 
 class ELECTRADataset(Dataset):
-    def __init__(self, samples, embedding_path,labels):
+    def __init__(self, samples, embedding_path,labels,index=None):
         self.embeddings = np.load(embedding_path)
         self.samples = samples
         self.labels = labels
@@ -19,7 +19,7 @@ class ELECTRADataset(Dataset):
         self.cls = np.zeros(self.embeddings.shape[1])
         self.frequency_index = self.samples.shape[2] - 1 
         self.cls_frequency = 1
-
+        self.index=index
 
 
         #initialize mask token vector values
@@ -54,8 +54,9 @@ class ELECTRADataset(Dataset):
         cls_marker = np.array([[self.cls_index,self.cls_frequency]],dtype=np.float)
         sample = np.concatenate((cls_marker,sample))
         electra_input,frequencies = self.match_sample_to_embedding(sample)
-        electra_label = self.labels[item]
-
+        electra_label = self.labels[item]       
+        if self.index is not None:
+            electra_label = np.asarray([-100 if i is not self.index else x for i,x in enumerate(electra_label)])
         output = {"electra_input": torch.tensor(electra_input,dtype=torch.long),
                 "electra_label": torch.tensor(electra_label,dtype=torch.long),
                 "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
@@ -89,16 +90,16 @@ class ELECTRADataset(Dataset):
         return np.where(np.all(self.embeddings == bug,axis=1))[0][0]
 
 #for creating weighted random sampler
-def create_weighted_sampler(labels):
-    labels_unique, counts = np.unique(labels,return_counts=True)
-    class_weights = [sum(counts) / c for c in counts]
-    example_weights = [class_weights[int(e)] for e in labels]
+def create_weighted_sampler(labels,index):
+    labels_unique, counts = np.unique(labels[:,index],return_counts=True)
+    total_examples = 0
+    for c,label in zip(counts,labels_unique):
+        if label != -100:
+            total_examples += c
+    class_weights = {label:total_examples / c for c,label in zip(counts,labels_unique)}
+    class_weights[-100] = 0
+    #if index == 0:
+    #    class_weights[1] = class_weights[1]/2
+    example_weights = [class_weights[int(e)] for e in labels[:,index]]
     sampler = WeightedRandomSampler(example_weights,len(labels))
     return sampler
-
-#for using class weights in loss function
-def create_class_weights(labels):
-    labels_unique, counts = np.unique(labels,return_counts=True)
-    class_weights = [1 / c for c in counts]
-    print(class_weights)
-    return class_weights

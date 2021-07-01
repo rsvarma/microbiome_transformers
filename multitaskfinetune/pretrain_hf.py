@@ -4,7 +4,7 @@ from transformers import AdamW,get_constant_schedule_with_warmup
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from sklearn import metrics
-
+import math
 
 import os
 from electra_discriminator import ElectraDiscriminator
@@ -18,7 +18,7 @@ class ELECTRATrainer:
     """
 
     def __init__(self, electra: ElectraDiscriminator, vocab_size: int,
-                 train_dataloader: DataLoader, train_orig_dataloader: DataLoader, log_files, test_dataloader: DataLoader = None,
+                 train_dataloaders: DataLoader, train_orig_dataloader: DataLoader, task_log_files,log_file,test_dataloader: DataLoader = None,
                  lr: float = 1e-4, betas=(0.9, 0.999), weight_decay: float = 0.01, warmup_steps=2000,
                  with_cuda: bool = True, cuda_devices=None, log_freq: int = 100,
                  freeze_embed=0,class_weights=None,loss_func='mse',optim='sgd',hidden_size=None):
@@ -68,7 +68,7 @@ class ELECTRATrainer:
             self.hardware = "parallel"
         
         # Setting the train and test data loader
-        self.train_data = train_dataloader
+        self.train_data = train_dataloaders
         self.train_orig_data = train_orig_dataloader
         self.test_data = test_dataloader
 
@@ -95,13 +95,15 @@ class ELECTRATrainer:
 
         # clear log file
 
-        self.log_files = log_files
-        self.num_tasks = len(log_files)
-        for file in self.log_files:
+        self.task_log_files = task_log_files
+        self.log_file = log_file
+        self.num_tasks = len(task_log_files)
+        for file in self.task_log_files:
             with open(file,"w+") as f:
-                f.write("EPOCH,MODE, AVG LOSS, TOTAL CORRECT, TOTAL ELEMENTS, ACCURACY, AUC, AUPR, TOTAL POSITIVE CORRECT, TOTAL POSITIVE, ACCURACY\n")
+                f.write("EPOCH,MODE, AVG LOSS, POSITIVE LOSS, NEGATIVE LOSS, TOTAL CORRECT, TOTAL ELEMENTS, ACCURACY, AUC, AUPR, TOTAL POSITIVE CORRECT, TOTAL POSITIVE, ACCURACY\n")
         print("Total Parameters:", sum([p.nelement() for p in self.electra.parameters()]))
-
+        with open(self.log_file,"w+") as f:
+            f.write("EPOCH, MODE, AVG LOSS\n")
     @staticmethod
     def calc_auc(y_true,y_probas,show_plot=False):
         fpr, tpr, thresholds = metrics.roc_curve(y_true,y_probas,pos_label = 1)
@@ -157,12 +159,20 @@ class ELECTRATrainer:
         """
         
 
-
+        if isinstance(data_loader, list):
+            iter = zip(*data_loader)
+            loader_lens = []
+            for loader in data_loader:
+                loader_lens.append(len(loader))
+            set_length = min(loader_lens)
+        else:
+            iter = data_loader
+            set_length = len(data_loader)
 
         # Setting the tqdm progress bar
-        data_iter = tqdm.tqdm(enumerate(data_loader),
+        data_iter = tqdm.tqdm(enumerate(iter),
                               desc="EP_%s:%d" % (str_code, epoch),
-                              total=len(data_loader),
+                              total=set_length,
                               bar_format="{l_bar}{r_bar}")
 
         cumulative_loss = 0.0
@@ -173,12 +183,25 @@ class ELECTRATrainer:
         total_positive = [0 for i in range(self.num_tasks)]
         all_scores = [[] for i in range(self.num_tasks)]
         all_labels = [[] for i in range(self.num_tasks)]
+        cumulative_task_losses = [0 for i in range(self.num_tasks)]
+        #losses on positive examples for each task
+        cumulative_task_pos_losses = [0 for i in range(self.num_tasks)]
+        #losses on negative examples for each task
+        cumulative_task_neg_losses = [0 for i in range(self.num_tasks)]
+        batch_num = 0
         for i, data in data_iter:
-
+            batch_num += 1
             #print(i)
             # 0. batch_data will be sent into the device(GPU or cpu)
+            if isinstance(data,tuple):
+                merged_data = data[0]
+                for i in range(1,len(data)):
+                    merged_data = {"electra_input": torch.vstack((merged_data['electra_input'],data[i]['electra_input'])),
+                                 "electra_label": torch.vstack((merged_data['electra_label'],data[i]['electra_label'])),
+                                "species_frequencies": torch.vstack((merged_data['species_frequencies'],data[i]['species_frequencies'])),
+                                }
+                data = merged_data
             data = {key: value.to(self.device) for key, value in data.items()}
-
             #create attention mask
             #pdb.set_trace()
             zero_boolean = torch.eq(data["species_frequencies"],0)
@@ -189,18 +212,49 @@ class ELECTRATrainer:
             # 1. forward the next_sentence_prediction and masked_lm model
             scores = self.electra.forward(data["electra_input"],mask)            
             # 3. backward and optimization only in train
-            #pdb.set_trace()
+
             #for mse loss
+            #print("batch {} losses: ".format(batch_num)) 
             if self.loss_func == 'mse':
                 loss = 0
                 for i,task_scores in enumerate(scores):
-                    lab_mask = data["electra_label"][:,i] != -100 
-                    loss += self.loss(task_scores[lab_mask,1],data["electra_label"][lab_mask,i].float())
+                    lab_mask = data["electra_label"][:,i] != -100             
+                    t_loss = self.loss(task_scores[lab_mask,1],data["electra_label"][lab_mask,i].float())
+                    #pdb.set_trace()
+                    if math.isnan(t_loss.item()):
+                        continue
+                    pos_mask = data["electra_label"][:,i] == 1
+                    neg_mask = data["electra_label"][:,i] == 0
+                    pos_loss = self.loss(task_scores[pos_mask,1],data["electra_label"][pos_mask,i].float())
+                    neg_loss = self.loss(task_scores[neg_mask,1],data["electra_label"][neg_mask,i].float())
+                    if not math.isnan(pos_loss.item()):
+                        cumulative_task_pos_losses[i] += pos_loss.item()*pos_mask.sum().item()
+                    if not math.isnan(neg_loss.item()):
+                        cumulative_task_neg_losses[i] += neg_loss.item()*neg_mask.sum().item()
+                    loss += t_loss
+                    cumulative_task_losses[i] += t_loss.item()*lab_mask.sum().item()
+                    #print(t_loss)
+
             #for cross entropy
             elif self.loss_func == 'ce':
                 loss = 0
                 for i,task_scores in enumerate(scores):
-                   loss += self.loss(task_scores,data["electra_label"][:,i].squeeze())
+                    #pdb.set_trace()
+                    lab_mask = data["electra_label"][:,i] != -100     
+                    if lab_mask.sum().item() == 0:
+                        continue                
+                    pos_mask = data["electra_label"][:,i] == 1
+                    neg_mask = data["electra_label"][:,i] == 0
+                    if pos_mask.sum().item() > 0:
+                        pos_loss = self.loss(task_scores[pos_mask],data["electra_label"][pos_mask,i])
+                        cumulative_task_pos_losses[i] += pos_loss.item()*pos_mask.sum().item()
+                    if neg_mask.sum().item()> 0:
+                        neg_loss = self.loss(task_scores[neg_mask],data["electra_label"][neg_mask,i])                        
+                        cumulative_task_neg_losses[i] += neg_loss.item()*neg_mask.sum().item()
+
+                    t_loss = self.loss(task_scores,data["electra_label"][:,i])
+                    loss += t_loss
+                    cumulative_task_losses[i] += t_loss.item()*lab_mask.sum().item()
             if train:
                 self.optim.zero_grad()
                 loss.backward()
@@ -238,13 +292,14 @@ class ELECTRATrainer:
                 total_positive[i] += task_label.nonzero().shape[0]
 
             log_loss = 0
-            if self.hardware == "parallel":
+            if self.hardware == "parallel":              
                 cumulative_loss += loss.sum().item()
                 log_loss = loss.sum().item()
 
             else:
                 cumulative_loss += loss.item()        
-                log_loss = loss.item()                
+                log_loss = loss.item() 
+            #print("batch {} cumulative loss: {}".format(batch_num,cumulative_loss))                   
  
             del data
             del mask
@@ -252,15 +307,16 @@ class ELECTRATrainer:
             del scores
             del predictions
             del positive_inds
-
+        #pdb.set_trace()
         for i in range(self.num_tasks):
             auc_score = 0
             aupr_score = 0
             auc_score = ELECTRATrainer.calc_auc(torch.cat(all_labels[i]).flatten().numpy(),torch.cat(all_scores[i]).numpy())
             aupr_score = ELECTRATrainer.calc_aupr(torch.cat(all_labels[i]).flatten().numpy(),torch.cat(all_scores[i]).numpy())       
-            with open(self.log_files[i],"a") as f:
-                f.write("{},{},{},{},{},{},{},{},{},{},{}\n".format(epoch,str_code,cumulative_loss/len(data_iter),total_correct[i],total_samples[i],total_correct[i]/total_samples[i]*100,auc_score,aupr_score,total_positive_correct[i],total_positive[i],total_positive_correct[i]/total_positive[i]*100))
-
+            with open(self.task_log_files[i],"a") as f:
+                f.write("{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(epoch,str_code,cumulative_task_losses[i]/total_samples[i],cumulative_task_pos_losses[i]/total_positive[i],cumulative_task_neg_losses[i]/(total_samples[i]-total_positive[i]),total_correct[i],total_samples[i],total_correct[i]/total_samples[i]*100,auc_score,aupr_score,total_positive_correct[i],total_positive[i],total_positive_correct[i]/total_positive[i]*100))
+        with open(self.log_file,"a") as f:
+            f.write("{},{},{}\n".format(epoch,str_code,cumulative_loss/len(data_iter)))
  
         
     def save(self, epoch, file_path):

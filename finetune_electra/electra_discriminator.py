@@ -16,11 +16,12 @@ class ElectraDiscriminator(nn.Module):
             self.discriminator = ElectraForSequenceClassification.from_pretrained(discriminator,config=config)
         else:
             self.discriminator = ElectraForSequenceClassification(config)
-        self.softmax = nn.Softmax()
+        self.softmax = nn.Softmax(1)
 
     def forward(self,data,attention_mask,labels):
         #pdb.set_trace()
         data = self.embed_layer(data)
-        loss,scores = self.discriminator(attention_mask=attention_mask,inputs_embeds=data,labels=labels)
-        scores = self.softmax(scores)
+        output = self.discriminator(attention_mask=attention_mask,inputs_embeds=data,labels=labels)
+        scores = self.softmax(output['logits'])
+        loss = output['loss']
         return loss, scores
