@@ -38,7 +38,7 @@ class ELECTRADataset(Dataset):
         
         self.mask_index = self.lookup_embedding(self.mask)
         self.cls_index = self.lookup_embedding(self.cls)
-        self.padding_index = self.lookup_embedding(self.padding)
+        self.padding_index = self.cls_index+1
         
 
     def __len__(self):

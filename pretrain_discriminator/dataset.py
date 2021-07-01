@@ -1,4 +1,4 @@
-from torch.utils.data import Dataset,WeightedRandomSampler
+from torch.utils.data import Dataset
 import tqdm
 import torch
 import random
@@ -6,22 +6,21 @@ import pdb
 import numpy as np
 
 class ELECTRADataset(Dataset):
-    def __init__(self, samples, embedding_path,labels):
+    def __init__(self, samples_path, embedding_path):
         self.embeddings = np.load(embedding_path)
-        self.samples = samples
-        self.labels = labels
+        self.num_embeds = self.embeddings.shape[0]
+        self.samples = np.load(samples_path)
         self.seq_len = self.samples.shape[1]+1
         #Initialize cls token vector values
-        #pdb.set_trace()
 
         #take average of all embeddings
-        #self.cls = np.average(self.embeddings,axis=0)
-        self.cls = np.zeros(self.embeddings.shape[1])
+        self.cls = np.average(self.embeddings,axis=0)
+        self.embed_index = 0
         self.frequency_index = self.samples.shape[2] - 1 
         self.cls_frequency = 1
 
 
-
+        self.ignore_index = -100
         #initialize mask token vector values
 
         #find max and min ranges of values for every feature in embedding space
@@ -39,7 +38,7 @@ class ELECTRADataset(Dataset):
         
         self.mask_index = self.lookup_embedding(self.mask)
         self.cls_index = self.lookup_embedding(self.cls)
-        self.padding_index = self.lookup_embedding(self.padding)
+        self.padding_index = self.cls_index+1
         
 
     def __len__(self):
@@ -53,28 +52,62 @@ class ELECTRADataset(Dataset):
         sample = sample[sorted_indices][::-1]
         cls_marker = np.array([[self.cls_index,self.cls_frequency]],dtype=np.float)
         sample = np.concatenate((cls_marker,sample))
-        electra_input,frequencies = self.match_sample_to_embedding(sample)
-        electra_label = self.labels[item]
+        electra_input,electra_label,frequencies,mask_locations = self.match_sample_to_embedding(sample)
+
+
 
         output = {"electra_input": torch.tensor(electra_input,dtype=torch.long),
                 "electra_label": torch.tensor(electra_label,dtype=torch.long),
                 "species_frequencies": torch.tensor(frequencies,dtype=torch.long),
+                "mask_locations": torch.tensor(mask_locations)
                 }
 
         return output
 
     def match_sample_to_embedding(self, sample):
-        electra_input = sample[:,0].copy()
-        frequencies = np.zeros(sample.shape[0])
+        output_label = []
+        electra_input = sample[:,self.embed_index].copy()
+        frequencies = sample[:,self.frequency_index]
+        mask_locations = np.full(sample.shape[0],False)
+        masked = False
         for i in range(sample.shape[0]):
             #pdb.set_trace()
             if sample[i,self.frequency_index] > 0:
-                frequencies[i] = sample[i,self.frequency_index]
+                prob = random.random()
+                if prob < 0.15 and i > 0 and sample[i,self.frequency_index] > 0:
+                    prob /= 0.15
+
+                    # 80% randomly change token to mask token
+                    if prob < 0.8  and masked == False:
+                        electra_input[i] = self.mask_index
+                        mask_locations[i] = True
+                        output_label.append(sample[i,self.embed_index])
+                        #electra, so not limiting masks
+                        #masked = True
+
+
+                    # 10% randomly change token to random token
+                    elif prob < 0.9:
+                        electra_input[i] = random.randrange(self.num_embeds)
+                        mask_locations[i] = True
+                        output_label.append(sample[i,self.embed_index])
+                        #append index of embedding to output label
+                        
+                    
+                    # 10% randomly change token to current token
+                    else:
+                        mask_locations[i] = True
+                        output_label.append(sample[i,self.embed_index])
+
+
+                else:
+                    output_label.append(sample[i,self.embed_index])
+
             else:
                 electra_input[i] = self.padding_index
-                
+                output_label.append(self.ignore_index)
 
-        return electra_input,frequencies
+        return electra_input, output_label,frequencies,mask_locations
 
     def generate_random_frequency(self):
         return np.random.randint(self.frequency_min,self.frequency_max)
@@ -87,21 +120,3 @@ class ELECTRADataset(Dataset):
 
     def lookup_embedding(self,bug):
         return np.where(np.all(self.embeddings == bug,axis=1))[0][0]
-
-#for creating weighted random sampler
-def create_weighted_sampler(labels):
-    labels_unique, counts = np.unique(labels,return_counts=True)
-    class_weights = [sum(counts) / c for c in counts]
-    #class_weights[1] = class_weights[1]/2
-    example_weights = [class_weights[int(e)] for e in labels]
-    #print("Example Weights:")
-    #print(example_weights)
-    sampler = WeightedRandomSampler(example_weights,len(labels))
-    return sampler
-
-#for using class weights in loss function
-def create_class_weights(labels):
-    labels_unique, counts = np.unique(labels,return_counts=True)
-    class_weights = [1 / c for c in counts]
-    print(class_weights)
-    return class_weights

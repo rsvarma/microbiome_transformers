@@ -15,18 +15,18 @@ def train():
     parser.add_argument("-t", "--samples", required=True, type=str, help="microbiome samples")
     parser.add_argument("-tl", "--sample_labels",required=True,type=str,default=None, help="labels for samples")
     parser.add_argument("-v", "--vocab_path", required=True, type=str, help="built vocab model path with electra-vocab")
-    parser.add_argument("-o", "--output_path", required=True, type=str, help="ex)output/")
+    parser.add_argument("-o", "--output_path", required=False, type=str, help="path to save models ex)output/")
     parser.add_argument("--test_samples",required=False,type=str,help="microbiome samples for test set, only provide if not trying to do cross validation. If providing this, --samples should provide the path to the training samples")
     parser.add_argument("--test_labels",required=False,type=str,help="labels for test set, only provide if not wanting to perform cross validation. If provided --sample_labels should provide the path to the train labels")
     parser.add_argument("--val_samples",required=False,type=str,help="microbiome samples for validation set, only provide if not trying to do cross validation. If providing this, --samples should provide the path to the training samples")
     parser.add_argument("--val_labels",required=False,type=str,help="labels for validation set, only provide if not wanting to perform cross validation. If provided --sample_labels should provide the path to the train labels")    
 
     parser.add_argument("-hs", "--hidden", type=int, default=100, help="hidden size of transformer model")
-    parser.add_argument("-l", "--layers", type=int, default=8, help="number of layers")
+    parser.add_argument("-l", "--layers", type=int, default=5, help="number of layers")
     parser.add_argument("-a", "--attn_heads", type=int, default=10, help="number of attention heads")
     parser.add_argument("-s", "--seq_len", type=int, default=1898, help="maximum sequence len")
 
-    parser.add_argument("-b", "--batch_size", type=int, default=3, help="number of batch_size")
+    parser.add_argument("-b", "--batch_size", type=int, default=32, help="number of batch_size")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=0, help="dataloader worker size")
 
@@ -52,17 +52,16 @@ def train():
 
     parser.add_argument("--weighted_sampler", dest='class_imb_strat', action='store_true',help="use weighted sampler")
     parser.add_argument("--class_weights",dest='class_imb_strat',action='store_false',help="use class weights")
-    parser.set_defaults(class_imb_strat=False)    
+    parser.set_defaults(class_imb_strat=True)    
 
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
-    parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
     parser.add_argument("--log_file", type=str,default=None,help="log file for performance metrics" )
 
     parser.add_argument("--lr", type=float, default=1e-2, help="learning rate of adam")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="adam first beta value")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")
+    parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam second beta value")
 
     parser.add_argument("--load_disc", type=str, default=None, help="path to saved state_dict of ELECTRA discriminator")
     parser.add_argument("--load_embed", type=str, default=None, help="path to saved state_dict of ELECTRA discriminator embedding layer")
@@ -122,7 +121,7 @@ def train():
                                 freeze_embed=args.freeze_opt,freeze_encoders=args.freeze_encoders,class_weights=torch.tensor(class_weights,dtype=torch.float),loss_func=args.loss_func,optim=args.optim,hidden_size=args.hidden*2)
 
             print("Training Start")
-            for epoch in range(args.resume_epoch,args.epochs):
+            for epoch in range(args.resume_epoch,args.epochs+args.resume_epoch):
                 #pdb.set_trace()
                 trainer.train(epoch,args.multi)
                 #if epoch == 4 or epoch == 9 or epoch == 14 or epoch == 19:

@@ -197,7 +197,7 @@ class ELECTRATrainer:
         pos_loss = 0.0
         neg_loss = 0.0
         for i, data in data_iter:
-            pdb.set_trace()
+            #pdb.set_trace()
             #print(i)
             data["electra_label"] = data["electra_label"].reshape(data["electra_label"].shape[0])            
             all_labels.append(data["electra_label"])
