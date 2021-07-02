@@ -1,4 +1,4 @@
-# Finetune Discriminator
+# Pretrain Generator
 
 This folder provides code for pretraining a generator on microbiome data
 

@@ -19,7 +19,7 @@ def train():
     parser.add_argument("-o", "--output_path", required=True, type=str, help="ex)output/")
 
     parser.add_argument("-hs", "--hidden", type=int, default=100, help="hidden size of transformer model")
-    parser.add_argument("-l", "--layers", type=int, default=8, help="number of layers")
+    parser.add_argument("-l", "--layers", type=int, default=5, help="number of layers")
     parser.add_argument("-a", "--attn_heads", type=int, default=10, help="number of attention heads")
     parser.add_argument("-s", "--seq_len", type=int, default=1898, help="maximum sequence len")
 
@@ -41,7 +41,6 @@ def train():
 
 
     parser.add_argument("--log_freq", type=int, default=100, help="printing loss every n iter: setting n")
-    parser.add_argument("--corpus_lines", type=int, default=None, help="total number of lines in corpus")
     parser.add_argument("--cuda_devices", type=int, nargs='+', default=None, help="CUDA device ids")
     parser.add_argument("--d_log_file", type=str,default=None,help="log file for discriminator performance metrics" )
 

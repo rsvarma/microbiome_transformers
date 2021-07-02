@@ -24,3 +24,6 @@ python begin.py -c ~/guille/train_encodings_512.npy -t ~/guille/test_encodings_5
 ~/models/gensgdlr1e2/gen_epoch179_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch209_gen/pytorch_model.bin ~/models/gensgdlr1e2/gen_epoch239_gen/pytorch_model.bin \
 --load_g_embed ~/models/gensgdlr1e2/gen_epoch29_gen_embed ~/models/gensgdlr1e2/gen_epoch59_gen_embed ~/models/gensgdlr1e2/gen_epoch89_gen_embed ~/models/gensgdlr1e2/gen_epoch119_gen_embed ~/models/gensgdlr1e2/gen_epoch149_gen_embed  \
  ~/models/gensgdlr1e2/gen_epoch179_gen_embed ~/models/gensgdlr1e2/gen_epoch209_gen_embed ~/models/gensgdlr1e2/gen_epoch239_gen_embed --freeze
+
+
+
