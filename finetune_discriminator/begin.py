@@ -81,6 +81,7 @@ def train():
             print("Loading Test Dataset")
             test_dataset = ELECTRADataset(test_samples, args.vocab_path,test_labels)
 
+            val_data_loader = None
             if val_samples is not None and val_labels is not None:
                 val_dataset = ELECTRADataset(val_samples,args.vocab_path,val_labels)
                 val_data_loader = DataLoader(val_dataset, batch_size=1, num_workers=args.num_workers)                
